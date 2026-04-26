@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"remembrancer/internal/config"
-	"remembrancer/internal/db"
+	"zora/internal/config"
+	"zora/internal/db"
 )
 
 func TestHealthz(t *testing.T) {
@@ -39,7 +39,7 @@ func TestIndexIncludesAppName(t *testing.T) {
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d", recorder.Code)
 	}
-	if !strings.Contains(recorder.Body.String(), "Remembrancer") {
+	if !strings.Contains(recorder.Body.String(), "Zora") {
 		t.Fatalf("index body should include app name, got %q", recorder.Body.String())
 	}
 }

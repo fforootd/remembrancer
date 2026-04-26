@@ -26,7 +26,7 @@ CREATE TABLE app_metadata (
 
 INSERT INTO app_metadata (key, value, updated_at)
 VALUES
-	('app_name', 'Remembrancer', datetime('now')),
+	('app_name', 'Zora', datetime('now')),
 	('milestone', '0', datetime('now'));
 `,
 	},

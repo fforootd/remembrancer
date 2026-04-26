@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	"remembrancer/internal/config"
+	"zora/internal/config"
 )
 
 //go:embed templates/*.html
@@ -64,7 +64,7 @@ func (s *Server) healthz(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 	data := indexData{
-		AppName:     "Remembrancer",
+		AppName:     "Zora",
 		UserName:    s.cfg.User.DisplayName,
 		RuntimePath: s.cfg.Paths.Runtime,
 		ArchivePath: s.cfg.Paths.Archive,

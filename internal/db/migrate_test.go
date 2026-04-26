@@ -19,7 +19,7 @@ func TestMigrateAppliesInitialMigration(t *testing.T) {
 	if err := database.QueryRow(`SELECT value FROM app_metadata WHERE key = 'app_name'`).Scan(&appName); err != nil {
 		t.Fatalf("read app metadata: %v", err)
 	}
-	if appName != "Remembrancer" {
+	if appName != "Zora" {
 		t.Fatalf("app_name = %q", appName)
 	}
 }

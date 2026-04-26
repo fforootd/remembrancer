@@ -1,4 +1,4 @@
-module remembrancer
+module zora
 
 go 1.26.2
 

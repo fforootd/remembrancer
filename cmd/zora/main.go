@@ -12,9 +12,9 @@ import (
 	"syscall"
 	"time"
 
-	"remembrancer/internal/config"
-	"remembrancer/internal/db"
-	"remembrancer/internal/server"
+	"zora/internal/config"
+	"zora/internal/db"
+	"zora/internal/server"
 )
 
 func main() {
@@ -83,8 +83,8 @@ func runServe(args []string, stdout, stderr io.Writer) int {
 
 	errs := make(chan error, 1)
 	go func() {
-		logger.Info("remembrancer serving", "bind", cfg.Server.Bind)
-		fmt.Fprintf(stdout, "Remembrancer listening on http://%s\n", cfg.Server.Bind)
+		logger.Info("zora serving", "bind", cfg.Server.Bind)
+		fmt.Fprintf(stdout, "Zora listening on http://%s\n", cfg.Server.Bind)
 		errs <- httpServer.ListenAndServe()
 	}()
 
@@ -111,5 +111,5 @@ func runServe(args []string, stdout, stderr io.Writer) int {
 
 func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "usage:")
-	fmt.Fprintln(w, "  remembrancer serve --config config/example.yaml")
+	fmt.Fprintln(w, "  zora serve --config config/example.yaml")
 }
