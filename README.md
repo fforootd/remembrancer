@@ -1,15 +1,29 @@
 # Remembrancer
 
-Remembrancer is a local-first personal evidence archive. The MVP starts by
-building the artifact spine before any chatbot, embeddings, or autonomous
-actions.
+Remembrancer is a local-first records system for personal and household artifacts.
+It preserves original evidence, extracts searchable text, and uses AI as an
+interpreter over cited sources.
 
-The initial product and architecture brief is preserved in
-`docs/design/personal_librarian_codex_design_guide.md`.
+The first product bet is simple:
 
-## Milestone 0
+> The briefing earns the archive.
 
-This repository currently contains the service skeleton:
+If Remembrancer cannot produce a weekly briefing worth reading, no amount of
+memory, reminders, or assistant behavior will save it. The first real vertical
+slice therefore focuses on importing a local mail archive, preserving raw
+messages, indexing text, and generating a source-linked briefing for a chosen
+seven-day window.
+
+## Design Docs
+
+- `DESIGN.md` is the design index.
+- `docs/design/remembrancer_design_guide.md` is the canonical product guide.
+- `docs/design/v0_implementation_guide.md` is the concrete v0 implementation guide for Codex.
+- `docs/design/archive/` contains historical design material that should not override current docs.
+
+## Current State
+
+Milestone 0 is implemented:
 
 - YAML configuration with local development defaults.
 - SQLite migration plumbing.

@@ -1,5 +1,6 @@
 .DS_Store
 .local/
+testdata/private/
 tmp/
 dist/
 coverage.out
