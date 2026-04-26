@@ -1,0 +1,6 @@
+.DS_Store
+.local/
+tmp/
+dist/
+coverage.out
+/remembrancer

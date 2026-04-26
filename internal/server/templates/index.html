@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ .AppName }}</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f7f7f4;
+        --ink: #202124;
+        --muted: #62656a;
+        --line: #d9d9d2;
+        --panel: #ffffff;
+        --accent: #1f6f63;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.5;
+      }
+
+      header {
+        border-bottom: 1px solid var(--line);
+        background: var(--panel);
+      }
+
+      main,
+      .topbar {
+        width: min(960px, calc(100vw - 32px));
+        margin: 0 auto;
+      }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 18px 0;
+      }
+
+      h1,
+      h2,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        font-size: 1.25rem;
+        font-weight: 700;
+      }
+
+      .subtitle {
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+
+      main {
+        padding: 36px 0 56px;
+      }
+
+      .status {
+        display: grid;
+        gap: 16px;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        margin-top: 24px;
+      }
+
+      .panel {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        padding: 16px;
+      }
+
+      .label {
+        color: var(--muted);
+        font-size: 0.8rem;
+        text-transform: uppercase;
+      }
+
+      .value {
+        margin-top: 4px;
+        overflow-wrap: anywhere;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 0.9rem;
+      }
+
+      .ready {
+        color: var(--accent);
+        font-weight: 700;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="topbar">
+        <div>
+          <h1>{{ .AppName }}</h1>
+          <p class="subtitle">Local-first personal evidence archive</p>
+        </div>
+        <p class="ready">Milestone 0</p>
+      </div>
+    </header>
+
+    <main>
+      <h2>Hello, {{ .UserName }}</h2>
+      <p class="subtitle">The service shell is running. Ingestion starts in the next milestone.</p>
+
+      <section class="status" aria-label="Runtime configuration">
+        <div class="panel">
+          <p class="label">Runtime</p>
+          <p class="value">{{ .RuntimePath }}</p>
+        </div>
+        <div class="panel">
+          <p class="label">Archive</p>
+          <p class="value">{{ .ArchivePath }}</p>
+        </div>
+        <div class="panel">
+          <p class="label">Inbox</p>
+          <p class="value">{{ .InboxPath }}</p>
+        </div>
+        <div class="panel">
+          <p class="label">SQLite</p>
+          <p class="value">{{ .SQLitePath }}</p>
+        </div>
+        <div class="panel">
+          <p class="label">LLM</p>
+          <p class="value">{{ if .LLMEnabled }}enabled{{ else }}disabled{{ end }}</p>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
