@@ -1,5 +1,7 @@
 # Zora
 
+> **Note:** This is currently a personal research project built in my free time.
+
 Zora is a local-first records system for personal and household artifacts.
 It preserves original evidence, extracts searchable text, and uses AI as an
 interpreter over cited sources.
