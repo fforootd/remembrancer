@@ -152,6 +152,72 @@ CREATE TABLE watch_file_state (
 );
 `,
 	},
+	{
+		Version: 3,
+		Name:    "docling documents and chunks",
+		SQL: `
+CREATE TABLE extracted_document (
+	artifact_id TEXT PRIMARY KEY,
+	markdown TEXT,
+	structured_json TEXT,
+	metadata_json TEXT,
+	status TEXT NOT NULL,
+	extractor TEXT NOT NULL,
+	extractor_version TEXT,
+	processing_time_ms INTEGER NOT NULL DEFAULT 0,
+	warnings_json TEXT,
+	errors_json TEXT,
+	created_at TEXT NOT NULL,
+	FOREIGN KEY (artifact_id) REFERENCES artifact(id)
+);
+
+CREATE TABLE artifact_chunk (
+	id TEXT PRIMARY KEY,
+	artifact_id TEXT NOT NULL,
+	ordinal INTEGER NOT NULL,
+	title TEXT,
+	text TEXT NOT NULL,
+	heading_path TEXT,
+	page_start INTEGER,
+	page_end INTEGER,
+	char_start INTEGER NOT NULL,
+	char_end INTEGER NOT NULL,
+	metadata_json TEXT,
+	created_at TEXT NOT NULL,
+	UNIQUE (artifact_id, ordinal),
+	FOREIGN KEY (artifact_id) REFERENCES artifact(id)
+);
+
+CREATE INDEX artifact_chunk_artifact_idx
+ON artifact_chunk(artifact_id, ordinal);
+
+CREATE VIRTUAL TABLE artifact_chunk_fts USING fts5(
+	title,
+	heading_path,
+	text,
+	content='artifact_chunk',
+	content_rowid='rowid',
+	tokenize='unicode61 remove_diacritics 2'
+);
+
+CREATE TRIGGER artifact_chunk_ai AFTER INSERT ON artifact_chunk BEGIN
+	INSERT INTO artifact_chunk_fts(rowid, title, heading_path, text)
+	VALUES (new.rowid, new.title, new.heading_path, new.text);
+END;
+
+CREATE TRIGGER artifact_chunk_ad AFTER DELETE ON artifact_chunk BEGIN
+	INSERT INTO artifact_chunk_fts(artifact_chunk_fts, rowid, title, heading_path, text)
+	VALUES('delete', old.rowid, old.title, old.heading_path, old.text);
+END;
+
+CREATE TRIGGER artifact_chunk_au AFTER UPDATE ON artifact_chunk BEGIN
+	INSERT INTO artifact_chunk_fts(artifact_chunk_fts, rowid, title, heading_path, text)
+	VALUES('delete', old.rowid, old.title, old.heading_path, old.text);
+	INSERT INTO artifact_chunk_fts(rowid, title, heading_path, text)
+	VALUES (new.rowid, new.title, new.heading_path, new.text);
+END;
+`,
+	},
 }
 
 func Migrate(ctx context.Context, database *sql.DB) error {

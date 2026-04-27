@@ -21,6 +21,12 @@ import (
 	"zora/internal/server"
 )
 
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
+
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
 }
@@ -34,6 +40,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 	switch args[0] {
 	case "serve":
 		return runServe(args[1:], stdout, stderr)
+	case "version":
+		return runVersion(stdout)
 	default:
 		fmt.Fprintf(stderr, "unknown command %q\n", args[0])
 		printUsage(stderr)
@@ -78,6 +86,11 @@ func runServe(args []string, stdout, stderr io.Writer) int {
 
 	var ingestService *ingest.Service
 	if cfg.Ingest.Enabled {
+		extractor, err := buildExtractor(cfg)
+		if err != nil {
+			fmt.Fprintf(stderr, "configure extractor: %v\n", err)
+			return 1
+		}
 		jobStore := jobs.Store{DB: database}
 		ingestService = &ingest.Service{
 			Scanner: ingest.Scanner{
@@ -91,7 +104,7 @@ func runServe(args []string, stdout, stderr io.Writer) int {
 			Handler: ingest.FileHandler{
 				DB:        database,
 				Blobs:     blobs.Store{ArchiveRoot: cfg.Paths.Archive},
-				Extractor: extract.LocalExtractor{Timeout: cfg.Ingest.ExtractTimeout},
+				Extractor: extractor,
 				Owner:     cfg.User.ID,
 			},
 			ScanInterval: cfg.Ingest.ScanInterval,
@@ -115,7 +128,7 @@ func runServe(args []string, stdout, stderr io.Writer) int {
 
 	errs := make(chan error, 1)
 	go func() {
-		logger.Info("zora serving", "bind", cfg.Server.Bind)
+		logger.Info("zora serving", "bind", cfg.Server.Bind, "version", version, "commit", commit, "date", date)
 		fmt.Fprintf(stdout, "Zora listening on http://%s\n", cfg.Server.Bind)
 		errs <- httpServer.ListenAndServe()
 	}()
@@ -138,7 +151,37 @@ func runServe(args []string, stdout, stderr io.Writer) int {
 	return 0
 }
 
+func runVersion(stdout io.Writer) int {
+	fmt.Fprintf(stdout, "zora %s\ncommit: %s\nbuilt: %s\n", version, commit, date)
+	return 0
+}
+
+func buildExtractor(cfg config.Config) (extract.Extractor, error) {
+	local := extract.LocalExtractor{Timeout: cfg.Extract.Timeout}
+	switch cfg.Extract.Provider {
+	case "local":
+		return local, nil
+	case "docling":
+		return extract.Router{
+			Text: local,
+			Binary: extract.DoclingExtractor{
+				BaseURL:         cfg.Extract.Docling.BaseURL,
+				APIKey:          cfg.Extract.Docling.APIKey,
+				OutputFormats:   cfg.Extract.Docling.OutputFormats,
+				DoOCR:           cfg.Extract.Docling.DoOCR,
+				ForceOCR:        cfg.Extract.Docling.ForceOCR,
+				TableMode:       cfg.Extract.Docling.TableMode,
+				ImageExportMode: cfg.Extract.Docling.ImageExportMode,
+				Timeout:         cfg.Extract.Timeout,
+			},
+		}, nil
+	default:
+		return nil, fmt.Errorf("unknown extract provider %q", cfg.Extract.Provider)
+	}
+}
+
 func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "usage:")
 	fmt.Fprintln(w, "  zora serve --config config/example.yaml")
+	fmt.Fprintln(w, "  zora version")
 }

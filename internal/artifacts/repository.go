@@ -14,6 +14,7 @@ type Artifact struct {
 	CreatedAt   string
 	HasText     bool
 	TextPreview sql.NullString
+	ChunkCount  int
 }
 
 type SearchResult struct {
@@ -31,9 +32,15 @@ func Recent(ctx context.Context, db *sql.DB, limit int) ([]Artifact, error) {
 	rows, err := db.QueryContext(ctx, `
 SELECT a.id, a.type, COALESCE(a.title, ''), a.event_at, a.created_at,
 	e.artifact_id IS NOT NULL AS has_text,
-	substr(e.text, 1, 180) AS text_preview
+	substr(e.text, 1, 180) AS text_preview,
+	COALESCE(cc.chunk_count, 0) AS chunk_count
 FROM artifact a
 LEFT JOIN extracted_text e ON e.artifact_id = a.id
+LEFT JOIN (
+	SELECT artifact_id, COUNT(*) AS chunk_count
+	FROM artifact_chunk
+	GROUP BY artifact_id
+) cc ON cc.artifact_id = a.id
 WHERE a.deleted_at IS NULL
 ORDER BY a.created_at DESC
 LIMIT ?
@@ -54,6 +61,7 @@ LIMIT ?
 			&artifact.CreatedAt,
 			&artifact.HasText,
 			&artifact.TextPreview,
+			&artifact.ChunkCount,
 		); err != nil {
 			return nil, fmt.Errorf("scan recent artifact: %w", err)
 		}

@@ -2,16 +2,16 @@ server:
   bind: "127.0.0.1:8787"
 
 user:
-  id: "florian"
-  display_name: "Florian"
+  id: "local"
+  display_name: "Local User"
 
 paths:
-  runtime: ".local/runtime"
-  archive: ".local/archive"
-  inbox: ".local/inbox"
+  runtime: "/var/lib/zora/runtime"
+  archive: "/var/lib/zora/archive"
+  inbox: "/var/lib/zora/inbox"
 
 sqlite:
-  path: ".local/runtime/users/florian/main.sqlite"
+  path: "/var/lib/zora/runtime/users/local/main.sqlite"
 
 ingest:
   enabled: true

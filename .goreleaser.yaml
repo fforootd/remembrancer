@@ -1,0 +1,102 @@
+version: 2
+
+project_name: zora
+
+builds:
+  - id: zora
+    main: ./cmd/zora
+    binary: zora
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{ .Version }} -X main.commit={{ .Commit }} -X main.date={{ .Date }}
+
+archives:
+  - id: zora
+    ids:
+      - zora
+    formats:
+      - tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+      - config/example.yaml
+      - packaging/config/zora.yaml
+      - packaging/systemd/*.service
+
+checksum:
+  name_template: checksums.txt
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-snapshot"
+
+changelog:
+  disable: true
+
+nfpms:
+  - id: zora-deb
+    ids:
+      - zora
+    package_name: zora
+    file_name_template: "{{ .PackageName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    vendor: fforootd
+    homepage: https://github.com/fforootd/zora
+    maintainer: Zora maintainers <zora@localhost>
+    description: Local-first records system for personal and household artifacts.
+    license: AGPL-3.0-only
+    formats:
+      - deb
+    bindir: /usr/bin
+    contents:
+      - src: packaging/config/zora.yaml
+        dst: /etc/zora/config.yaml
+        type: config|noreplace
+      - src: packaging/systemd/zora.service
+        dst: /lib/systemd/system/zora.service
+      - src: packaging/systemd/docling-serve.service
+        dst: /lib/systemd/system/docling-serve.service
+      - dst: /etc/zora
+        type: dir
+        file_info:
+          mode: 0750
+      - dst: /var/lib/zora
+        type: dir
+        file_info:
+          mode: 0750
+      - dst: /var/lib/zora/runtime
+        type: dir
+        file_info:
+          mode: 0750
+      - dst: /var/lib/zora/archive
+        type: dir
+        file_info:
+          mode: 0750
+      - dst: /var/lib/zora/inbox
+        type: dir
+        file_info:
+          mode: 0750
+      - dst: /var/lib/zora/docling
+        type: dir
+        file_info:
+          mode: 0750
+      - dst: /var/lib/zora/docling/artifacts
+        type: dir
+        file_info:
+          mode: 0750
+      - dst: /opt/zora
+        type: dir
+        file_info:
+          mode: 0755
+    scripts:
+      postinstall: packaging/deb/postinstall.sh
+      preremove: packaging/deb/preremove.sh
+      postremove: packaging/deb/postremove.sh

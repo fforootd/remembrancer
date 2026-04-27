@@ -20,12 +20,37 @@ const (
 
 type Result struct {
 	Text             string
+	Markdown         string
+	StructuredJSON   string
+	MetadataJSON     string
 	Extractor        string
 	ExtractorVersion string
+	Status           string
+	ProcessingTime   time.Duration
+	Warnings         []string
+	Errors           []string
 }
 
 type Extractor interface {
 	Extract(ctx context.Context, path string, artifactType string) (Result, error)
+}
+
+type Router struct {
+	Text   Extractor
+	Binary Extractor
+}
+
+func (r Router) Extract(ctx context.Context, path string, artifactType string) (Result, error) {
+	if artifactType == TypeText {
+		if r.Text == nil {
+			return Result{}, fmt.Errorf("text extractor is required")
+		}
+		return r.Text.Extract(ctx, path, artifactType)
+	}
+	if r.Binary == nil {
+		return Result{}, fmt.Errorf("binary extractor is required")
+	}
+	return r.Binary.Extract(ctx, path, artifactType)
 }
 
 type LocalExtractor struct {
@@ -61,7 +86,9 @@ func extractTextFile(path string) (Result, error) {
 	}
 	return Result{
 		Text:      string(data),
+		Markdown:  string(data),
 		Extractor: "utf8",
+		Status:    "success",
 	}, nil
 }
 
@@ -89,6 +116,8 @@ func (e LocalExtractor) run(ctx context.Context, name string, args []string) (Re
 
 	return Result{
 		Text:      stdout.String(),
+		Markdown:  stdout.String(),
 		Extractor: name,
+		Status:    "success",
 	}, nil
 }

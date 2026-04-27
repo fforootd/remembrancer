@@ -203,6 +203,14 @@
           <p class="value">{{ .SQLitePath }}</p>
         </div>
         <div class="panel">
+          <p class="label">Extraction</p>
+          <p class="value">{{ .ExtractProvider }}</p>
+          <p class="meta">{{ .ExtractTimeout }}{{ if .DoclingBaseURL }} &middot; {{ .DoclingBaseURL }}{{ end }}</p>
+          {{ if eq .ExtractProvider "docling" }}
+            <p class="meta">Docling {{ if .DoclingHealth.OK }}ready{{ else }}unreachable{{ end }}{{ if .DoclingHealth.Detail }} &middot; {{ .DoclingHealth.Detail }}{{ end }}</p>
+          {{ end }}
+        </div>
+        <div class="panel">
           <p class="label">LLM</p>
           <p class="value">{{ if .LLMEnabled }}enabled{{ else }}disabled{{ end }}</p>
           <p class="meta">{{ .LLMBaseURL }}{{ if .LLMModel }} / {{ .LLMModel }}{{ end }}</p>
@@ -215,7 +223,7 @@
             <div>
               <p class="label">Ingest Queue</p>
               <p class="value">{{ if .IngestEnabled }}enabled{{ else }}disabled{{ end }}</p>
-              <p class="meta">{{ .IngestWorkers }} workers &middot; scan {{ .ScanInterval }} &middot; settle {{ .SettleDuration }} &middot; extract {{ .ExtractTimeout }}</p>
+              <p class="meta">{{ .IngestWorkers }} workers &middot; scan {{ .ScanInterval }} &middot; settle {{ .SettleDuration }}</p>
             </div>
             <form method="post" action="/ingest/scan">
               <button class="button" type="submit" {{ if not .IngestEnabled }}disabled{{ end }}>Scan now</button>
@@ -228,11 +236,16 @@
             <span class="pill">dead {{ index .JobCounts "dead" }}</span>
             <span class="pill">succeeded {{ index .JobCounts "succeeded" }}</span>
           </div>
+          <div class="counts" aria-label="Chunk counts">
+            <span class="pill">chunks {{ .ChunkStats.Chunks }}</span>
+            <span class="pill">chunked artifacts {{ .ChunkStats.Artifacts }}</span>
+          </div>
           <div class="counts" aria-label="Watch folder counts">
             <span class="pill">seen {{ .WatchStats.Seen }}</span>
             <span class="pill">supported {{ .WatchStats.Supported }}</span>
             <span class="pill">ignored {{ .WatchStats.Ignored }}</span>
           </div>
+          {{ if .LastExtractError }}<p class="meta error">Last extraction error: {{ .LastExtractError }}</p>{{ end }}
           {{ if .HasLastScan }}
             <p class="meta">Last scan: {{ .LastScan.ScannedAt }} &middot; seen {{ .LastScan.Seen }} &middot; enqueued {{ .LastScan.Enqueued }} &middot; existing {{ .LastScan.Existing }} &middot; settling {{ .LastScan.Settling }}{{ if .LastScanError }} &middot; <span class="error">{{ .LastScanError }}</span>{{ end }}</p>
           {{ end }}
@@ -247,7 +260,7 @@
               <div class="row">
                 <div>
                   <p><strong>{{ .Title }}</strong></p>
-                  <p class="meta">{{ .Type }} &middot; {{ .ID }}{{ if .HasText }} &middot; text ready{{ end }}</p>
+                  <p class="meta">{{ .Type }} &middot; {{ .ID }}{{ if .HasText }} &middot; text ready{{ end }}{{ if .ChunkCount }} &middot; {{ .ChunkCount }} chunks{{ end }}</p>
                 </div>
               </div>
               {{ if .TextPreview.Valid }}<p class="meta">{{ .TextPreview.String }}</p>{{ end }}

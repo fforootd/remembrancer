@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -13,12 +14,13 @@ import (
 )
 
 type Config struct {
-	Server ServerConfig `yaml:"server"`
-	User   UserConfig   `yaml:"user"`
-	Paths  PathConfig   `yaml:"paths"`
-	SQLite SQLiteConfig `yaml:"sqlite"`
-	Ingest IngestConfig `yaml:"ingest"`
-	LLM    LLMConfig    `yaml:"llm"`
+	Server  ServerConfig  `yaml:"server"`
+	User    UserConfig    `yaml:"user"`
+	Paths   PathConfig    `yaml:"paths"`
+	SQLite  SQLiteConfig  `yaml:"sqlite"`
+	Ingest  IngestConfig  `yaml:"ingest"`
+	Extract ExtractConfig `yaml:"extract"`
+	LLM     LLMConfig     `yaml:"llm"`
 }
 
 type ServerConfig struct {
@@ -45,8 +47,23 @@ type IngestConfig struct {
 	ScanInterval   time.Duration `yaml:"scan_interval"`
 	SettleDuration time.Duration `yaml:"settle_duration"`
 	Workers        int           `yaml:"workers"`
-	ExtractTimeout time.Duration `yaml:"extract_timeout"`
 	MaxAttempts    int           `yaml:"max_attempts"`
+}
+
+type ExtractConfig struct {
+	Provider string               `yaml:"provider"`
+	Timeout  time.Duration        `yaml:"timeout"`
+	Docling  DoclingExtractConfig `yaml:"docling"`
+}
+
+type DoclingExtractConfig struct {
+	BaseURL         string   `yaml:"base_url"`
+	APIKey          string   `yaml:"api_key"`
+	OutputFormats   []string `yaml:"output_formats"`
+	DoOCR           bool     `yaml:"do_ocr"`
+	ForceOCR        bool     `yaml:"force_ocr"`
+	TableMode       string   `yaml:"table_mode"`
+	ImageExportMode string   `yaml:"image_export_mode"`
 }
 
 type LLMConfig struct {
@@ -77,8 +94,19 @@ func Default() Config {
 			ScanInterval:   30 * time.Second,
 			SettleDuration: 10 * time.Second,
 			Workers:        2,
-			ExtractTimeout: 2 * time.Minute,
 			MaxAttempts:    3,
+		},
+		Extract: ExtractConfig{
+			Provider: "docling",
+			Timeout:  5 * time.Minute,
+			Docling: DoclingExtractConfig{
+				BaseURL:         "http://127.0.0.1:5001",
+				OutputFormats:   []string{"md", "text", "json"},
+				DoOCR:           true,
+				ForceOCR:        false,
+				TableMode:       "accurate",
+				ImageExportMode: "placeholder",
+			},
 		},
 		LLM: LLMConfig{
 			Enabled: false,
@@ -138,14 +166,40 @@ func (cfg Config) Validate() error {
 	if cfg.Ingest.Workers < 1 {
 		return errors.New("ingest.workers must be at least 1")
 	}
-	if cfg.Ingest.ExtractTimeout <= 0 {
-		return errors.New("ingest.extract_timeout must be positive")
-	}
 	if cfg.Ingest.MaxAttempts < 1 {
 		return errors.New("ingest.max_attempts must be at least 1")
 	}
+	if err := cfg.Extract.Validate(); err != nil {
+		return err
+	}
 	if cfg.LLM.Enabled && cfg.LLM.BaseURL == "" {
 		return errors.New("llm.base_url is required when llm.enabled is true")
+	}
+	return nil
+}
+
+func (cfg ExtractConfig) Validate() error {
+	switch cfg.Provider {
+	case "docling", "local":
+	case "":
+		return errors.New("extract.provider is required")
+	default:
+		return fmt.Errorf("extract.provider must be docling or local, got %q", cfg.Provider)
+	}
+	if cfg.Timeout <= 0 {
+		return errors.New("extract.timeout must be positive")
+	}
+	if cfg.Provider == "docling" {
+		if cfg.Docling.BaseURL == "" {
+			return errors.New("extract.docling.base_url is required when extract.provider is docling")
+		}
+		parsed, err := url.Parse(cfg.Docling.BaseURL)
+		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+			return fmt.Errorf("extract.docling.base_url must be an absolute URL")
+		}
+		if len(cfg.Docling.OutputFormats) == 0 {
+			return errors.New("extract.docling.output_formats must include at least one format")
+		}
 	}
 	return nil
 }

@@ -22,10 +22,15 @@ type FileHandler struct {
 }
 
 type JobResult struct {
-	ArtifactID     string `json:"artifact_id"`
-	ContentHash    string `json:"content_hash"`
-	ExtractedChars int    `json:"extracted_chars"`
-	Extractor      string `json:"extractor"`
+	ArtifactID       string `json:"artifact_id"`
+	ContentHash      string `json:"content_hash"`
+	ExtractedChars   int    `json:"extracted_chars"`
+	TextChars        int    `json:"text_chars"`
+	MarkdownChars    int    `json:"markdown_chars"`
+	ChunkCount       int    `json:"chunk_count"`
+	Extractor        string `json:"extractor"`
+	DoclingStatus    string `json:"docling_status"`
+	ProcessingTimeMS int64  `json:"processing_time_ms"`
 }
 
 func (h FileHandler) HandleJob(ctx context.Context, job jobs.Job) (string, error) {
@@ -69,15 +74,21 @@ func (h FileHandler) HandleJob(ctx context.Context, job jobs.Job) (string, error
 		return "", err
 	}
 
-	if err := h.persistExtractedText(ctx, artifactID, payload.Title, extracted, now); err != nil {
+	persisted, err := h.persistExtraction(ctx, artifactID, payload.Title, extracted, now)
+	if err != nil {
 		return "", err
 	}
 
 	result := JobResult{
-		ArtifactID:     artifactID,
-		ContentHash:    object.Hash,
-		ExtractedChars: len(extracted.Text),
-		Extractor:      extracted.Extractor,
+		ArtifactID:       artifactID,
+		ContentHash:      object.Hash,
+		ExtractedChars:   persisted.TextChars,
+		TextChars:        persisted.TextChars,
+		MarkdownChars:    persisted.MarkdownChars,
+		ChunkCount:       persisted.ChunkCount,
+		Extractor:        extracted.Extractor,
+		DoclingStatus:    extractionStatus(extracted),
+		ProcessingTimeMS: extracted.ProcessingTime.Milliseconds(),
 	}
 	data, err := json.Marshal(result)
 	if err != nil {
@@ -153,12 +164,34 @@ ON CONFLICT DO UPDATE SET
 	return nil
 }
 
-func (h FileHandler) persistExtractedText(ctx context.Context, artifactID, title string, extracted extract.Result, now time.Time) error {
+type persistedExtraction struct {
+	TextChars     int
+	MarkdownChars int
+	ChunkCount    int
+}
+
+func (h FileHandler) persistExtraction(ctx context.Context, artifactID, title string, extracted extract.Result, now time.Time) (persistedExtraction, error) {
 	tx, err := h.DB.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("begin extracted text transaction: %w", err)
+		return persistedExtraction{}, fmt.Errorf("begin extracted text transaction: %w", err)
 	}
 	defer tx.Rollback()
+
+	canonicalText := canonicalText(extracted)
+	chunkSource := extracted.Markdown
+	if strings.TrimSpace(chunkSource) == "" {
+		chunkSource = canonicalText
+	}
+	chunks := ChunkMarkdown(artifactID, title, chunkSource)
+	warningsJSON, err := stringListJSON(extracted.Warnings)
+	if err != nil {
+		return persistedExtraction{}, err
+	}
+	errorsJSON, err := stringListJSON(extracted.Errors)
+	if err != nil {
+		return persistedExtraction{}, err
+	}
+	status := extractionStatus(extracted)
 
 	if _, err := tx.ExecContext(ctx, `
 INSERT INTO extracted_text (artifact_id, text, extractor, extractor_version, created_at)
@@ -170,12 +203,12 @@ ON CONFLICT(artifact_id) DO UPDATE SET
 	created_at = excluded.created_at
 `,
 		artifactID,
-		extracted.Text,
+		canonicalText,
 		extracted.Extractor,
 		extracted.ExtractorVersion,
 		formatTime(now),
 	); err != nil {
-		return fmt.Errorf("upsert extracted text: %w", err)
+		return persistedExtraction{}, fmt.Errorf("upsert extracted text: %w", err)
 	}
 
 	if _, err := tx.ExecContext(ctx, `
@@ -188,16 +221,77 @@ ON CONFLICT(artifact_id) DO UPDATE SET
 `,
 		artifactID,
 		title,
-		extracted.Text,
+		canonicalText,
 		formatTime(now),
 	); err != nil {
-		return fmt.Errorf("upsert search document: %w", err)
+		return persistedExtraction{}, fmt.Errorf("upsert search document: %w", err)
+	}
+
+	if _, err := tx.ExecContext(ctx, `
+INSERT INTO extracted_document (
+	artifact_id, markdown, structured_json, metadata_json, status, extractor,
+	extractor_version, processing_time_ms, warnings_json, errors_json, created_at
+) VALUES (?, NULLIF(?, ''), NULLIF(?, ''), NULLIF(?, ''), ?, ?, NULLIF(?, ''), ?, NULLIF(?, ''), NULLIF(?, ''), ?)
+ON CONFLICT(artifact_id) DO UPDATE SET
+	markdown = excluded.markdown,
+	structured_json = excluded.structured_json,
+	metadata_json = excluded.metadata_json,
+	status = excluded.status,
+	extractor = excluded.extractor,
+	extractor_version = excluded.extractor_version,
+	processing_time_ms = excluded.processing_time_ms,
+	warnings_json = excluded.warnings_json,
+	errors_json = excluded.errors_json,
+	created_at = excluded.created_at
+`,
+		artifactID,
+		extracted.Markdown,
+		extracted.StructuredJSON,
+		extracted.MetadataJSON,
+		status,
+		extracted.Extractor,
+		extracted.ExtractorVersion,
+		extracted.ProcessingTime.Milliseconds(),
+		warningsJSON,
+		errorsJSON,
+		formatTime(now),
+	); err != nil {
+		return persistedExtraction{}, fmt.Errorf("upsert extracted document: %w", err)
+	}
+
+	if _, err := tx.ExecContext(ctx, `DELETE FROM artifact_chunk WHERE artifact_id = ?`, artifactID); err != nil {
+		return persistedExtraction{}, fmt.Errorf("delete old artifact chunks: %w", err)
+	}
+	for _, chunk := range chunks {
+		if _, err := tx.ExecContext(ctx, `
+INSERT INTO artifact_chunk (
+	id, artifact_id, ordinal, title, text, heading_path,
+	page_start, page_end, char_start, char_end, metadata_json, created_at
+) VALUES (?, ?, ?, NULLIF(?, ''), ?, NULLIF(?, ''), NULL, NULL, ?, ?, NULLIF(?, ''), ?)
+`,
+			chunk.ID,
+			artifactID,
+			chunk.Ordinal,
+			chunk.Title,
+			chunk.Text,
+			chunk.HeadingPath,
+			chunk.CharStart,
+			chunk.CharEnd,
+			chunk.MetadataJSON,
+			formatTime(now),
+		); err != nil {
+			return persistedExtraction{}, fmt.Errorf("insert artifact chunk: %w", err)
+		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit extracted text transaction: %w", err)
+		return persistedExtraction{}, fmt.Errorf("commit extracted text transaction: %w", err)
 	}
-	return nil
+	return persistedExtraction{
+		TextChars:     len(canonicalText),
+		MarkdownChars: len(extracted.Markdown),
+		ChunkCount:    len(chunks),
+	}, nil
 }
 
 func (h FileHandler) now() time.Time {
@@ -212,4 +306,29 @@ func isPermanentExtractError(err error) bool {
 	return strings.Contains(message, "not installed or not on path") ||
 		strings.Contains(message, "unsupported artifact type") ||
 		strings.Contains(message, "not valid utf-8")
+}
+
+func canonicalText(extracted extract.Result) string {
+	if extracted.Text != "" {
+		return extracted.Text
+	}
+	return extracted.Markdown
+}
+
+func extractionStatus(extracted extract.Result) string {
+	if extracted.Status != "" {
+		return extracted.Status
+	}
+	return "success"
+}
+
+func stringListJSON(values []string) (string, error) {
+	if len(values) == 0 {
+		return "", nil
+	}
+	data, err := json.Marshal(values)
+	if err != nil {
+		return "", fmt.Errorf("encode extraction messages: %w", err)
+	}
+	return string(data), nil
 }

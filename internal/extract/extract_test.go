@@ -24,6 +24,12 @@ func TestLocalExtractorReadsUTF8Text(t *testing.T) {
 	if result.Extractor != "utf8" {
 		t.Fatalf("extractor = %q", result.Extractor)
 	}
+	if result.Markdown != "Payment receipt\n" {
+		t.Fatalf("markdown = %q", result.Markdown)
+	}
+	if result.Status != "success" {
+		t.Fatalf("status = %q", result.Status)
+	}
 }
 
 func TestLocalExtractorRejectsInvalidUTF8Text(t *testing.T) {

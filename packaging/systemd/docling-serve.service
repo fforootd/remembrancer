@@ -1,0 +1,26 @@
+[Unit]
+Description=Docling Serve extraction API for Zora
+Documentation=https://github.com/docling-project/docling-serve
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=zora
+Group=zora
+WorkingDirectory=/var/lib/zora
+Environment=DOCLING_SERVE_ENABLE_UI=1
+Environment=DOCLING_SERVE_ARTIFACTS_PATH=/var/lib/zora/docling/artifacts
+ExecStart=/opt/zora/docling/bin/docling-serve run --host 127.0.0.1 --port 5001 --enable-ui
+Restart=on-failure
+RestartSec=10s
+StateDirectory=zora
+RuntimeDirectory=zora-docling
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/var/lib/zora /opt/zora
+
+[Install]
+WantedBy=multi-user.target

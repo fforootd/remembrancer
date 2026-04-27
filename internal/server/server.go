@@ -8,9 +8,11 @@ import (
 	"html/template"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"zora/internal/artifacts"
 	"zora/internal/config"
+	"zora/internal/extract"
 	"zora/internal/ingest"
 	"zora/internal/jobs"
 )
@@ -96,41 +98,97 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "read watch stats", http.StatusInternalServerError)
 		return
 	}
+	chunkStats, err := s.chunkStats(r.Context())
+	if err != nil {
+		s.logger.Error("read chunk stats", "error", err)
+		http.Error(w, "read chunk stats", http.StatusInternalServerError)
+		return
+	}
+	lastExtractError, err := s.lastExtractError(r.Context())
+	if err != nil {
+		s.logger.Error("read last extraction error", "error", err)
+		http.Error(w, "read last extraction error", http.StatusInternalServerError)
+		return
+	}
 
 	lastScan, scanErr, hasLastScan := ingest.ScanResult{}, error(nil), false
 	if s.ingest != nil {
 		lastScan, scanErr, hasLastScan = s.ingest.LastScan()
 	}
 	ingestEnabled := s.cfg.Ingest.Enabled && s.ingest != nil
+	doclingHealth := extract.HealthStatus{Detail: "not configured"}
+	if s.cfg.Extract.Provider == "docling" {
+		doclingHealth = extract.CheckDoclingHealth(r.Context(), s.cfg.Extract.Docling.BaseURL, s.cfg.Extract.Docling.APIKey, 250*time.Millisecond)
+	}
 
 	data := indexData{
-		AppName:         "Zora",
-		UserName:        s.cfg.User.DisplayName,
-		RuntimePath:     s.cfg.Paths.Runtime,
-		ArchivePath:     s.cfg.Paths.Archive,
-		InboxPath:       s.cfg.Paths.Inbox,
-		SQLitePath:      s.cfg.SQLite.Path,
-		LLMEnabled:      s.cfg.LLM.Enabled,
-		LLMBaseURL:      s.cfg.LLM.BaseURL,
-		LLMModel:        s.cfg.LLM.Model,
-		IngestEnabled:   ingestEnabled,
-		IngestWorkers:   s.cfg.Ingest.Workers,
-		ScanInterval:    s.cfg.Ingest.ScanInterval.String(),
-		SettleDuration:  s.cfg.Ingest.SettleDuration.String(),
-		ExtractTimeout:  s.cfg.Ingest.ExtractTimeout.String(),
-		JobCounts:       jobCounts,
-		RecentJobs:      recentJobs,
-		RecentArtifacts: recentArtifacts,
-		WatchStats:      watchStats,
-		LastScan:        lastScan,
-		LastScanError:   errorString(scanErr),
-		HasLastScan:     hasLastScan,
+		AppName:          "Zora",
+		UserName:         s.cfg.User.DisplayName,
+		RuntimePath:      s.cfg.Paths.Runtime,
+		ArchivePath:      s.cfg.Paths.Archive,
+		InboxPath:        s.cfg.Paths.Inbox,
+		SQLitePath:       s.cfg.SQLite.Path,
+		LLMEnabled:       s.cfg.LLM.Enabled,
+		LLMBaseURL:       s.cfg.LLM.BaseURL,
+		LLMModel:         s.cfg.LLM.Model,
+		IngestEnabled:    ingestEnabled,
+		IngestWorkers:    s.cfg.Ingest.Workers,
+		ScanInterval:     s.cfg.Ingest.ScanInterval.String(),
+		SettleDuration:   s.cfg.Ingest.SettleDuration.String(),
+		ExtractProvider:  s.cfg.Extract.Provider,
+		ExtractTimeout:   s.cfg.Extract.Timeout.String(),
+		DoclingBaseURL:   s.cfg.Extract.Docling.BaseURL,
+		DoclingHealth:    doclingHealth,
+		LastExtractError: lastExtractError,
+		JobCounts:        jobCounts,
+		RecentJobs:       recentJobs,
+		RecentArtifacts:  recentArtifacts,
+		WatchStats:       watchStats,
+		ChunkStats:       chunkStats,
+		LastScan:         lastScan,
+		LastScanError:    errorString(scanErr),
+		HasLastScan:      hasLastScan,
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.templates.ExecuteTemplate(w, "index.html", data); err != nil {
 		s.logger.Error("render index", "error", err)
 	}
+}
+
+func (s *Server) chunkStats(ctx context.Context) (chunkStats, error) {
+	var stats chunkStats
+	err := s.database.QueryRowContext(ctx, `
+SELECT COUNT(*), COUNT(DISTINCT artifact_id)
+FROM artifact_chunk
+`).Scan(&stats.Chunks, &stats.Artifacts)
+	if err != nil {
+		return chunkStats{}, err
+	}
+	return stats, nil
+}
+
+func (s *Server) lastExtractError(ctx context.Context) (string, error) {
+	var lastError sql.NullString
+	err := s.database.QueryRowContext(ctx, `
+SELECT last_error
+FROM ingest_job
+WHERE kind = ?
+	AND last_error IS NOT NULL
+	AND last_error <> ''
+ORDER BY updated_at DESC, created_at DESC
+LIMIT 1
+`, ingest.JobKindIngestFile).Scan(&lastError)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	if !lastError.Valid {
+		return "", nil
+	}
+	return lastError.String, nil
 }
 
 func (s *Server) scanIngest(w http.ResponseWriter, r *http.Request) {
@@ -169,31 +227,41 @@ func errorString(err error) string {
 }
 
 type indexData struct {
-	AppName         string
-	UserName        string
-	RuntimePath     string
-	ArchivePath     string
-	InboxPath       string
-	SQLitePath      string
-	LLMEnabled      bool
-	LLMBaseURL      string
-	LLMModel        string
-	IngestEnabled   bool
-	IngestWorkers   int
-	ScanInterval    string
-	SettleDuration  string
-	ExtractTimeout  string
-	JobCounts       map[string]int
-	RecentJobs      []jobs.Job
-	RecentArtifacts []artifacts.Artifact
-	WatchStats      watchStats
-	LastScan        ingest.ScanResult
-	LastScanError   string
-	HasLastScan     bool
+	AppName          string
+	UserName         string
+	RuntimePath      string
+	ArchivePath      string
+	InboxPath        string
+	SQLitePath       string
+	LLMEnabled       bool
+	LLMBaseURL       string
+	LLMModel         string
+	IngestEnabled    bool
+	IngestWorkers    int
+	ScanInterval     string
+	SettleDuration   string
+	ExtractProvider  string
+	ExtractTimeout   string
+	DoclingBaseURL   string
+	DoclingHealth    extract.HealthStatus
+	LastExtractError string
+	JobCounts        map[string]int
+	RecentJobs       []jobs.Job
+	RecentArtifacts  []artifacts.Artifact
+	WatchStats       watchStats
+	ChunkStats       chunkStats
+	LastScan         ingest.ScanResult
+	LastScanError    string
+	HasLastScan      bool
 }
 
 type watchStats struct {
 	Seen      int
 	Supported int
 	Ignored   int
+}
+
+type chunkStats struct {
+	Chunks    int
+	Artifacts int
 }

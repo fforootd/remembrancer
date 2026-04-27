@@ -21,6 +21,15 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.LLM.Enabled {
 		t.Fatal("LLM should be disabled by default")
 	}
+	if cfg.Extract.Provider != "docling" {
+		t.Fatalf("Extract.Provider = %q", cfg.Extract.Provider)
+	}
+	if cfg.Extract.Docling.BaseURL != "http://127.0.0.1:5001" {
+		t.Fatalf("Docling.BaseURL = %q", cfg.Extract.Docling.BaseURL)
+	}
+	if got := cfg.Extract.Docling.OutputFormats; len(got) != 3 || got[0] != "md" || got[1] != "text" || got[2] != "json" {
+		t.Fatalf("Docling.OutputFormats = %#v", got)
+	}
 }
 
 func TestLoadExplicitConfig(t *testing.T) {
@@ -42,8 +51,18 @@ ingest:
   scan_interval: "45s"
   settle_duration: "5s"
   workers: 4
-  extract_timeout: "90s"
   max_attempts: 5
+extract:
+  provider: "local"
+  timeout: "90s"
+  docling:
+    base_url: "http://127.0.0.1:5001"
+    api_key: "secret"
+    output_formats: ["md", "text"]
+    do_ocr: false
+    force_ocr: true
+    table_mode: "fast"
+    image_export_mode: "placeholder"
 llm:
   enabled: true
   base_url: "http://127.0.0.1:11434/v1"
@@ -72,6 +91,15 @@ llm:
 	}
 	if cfg.Ingest.ScanInterval.String() != "45s" {
 		t.Fatalf("Ingest.ScanInterval = %s", cfg.Ingest.ScanInterval)
+	}
+	if cfg.Extract.Provider != "local" {
+		t.Fatalf("Extract.Provider = %q", cfg.Extract.Provider)
+	}
+	if cfg.Extract.Timeout.String() != "1m30s" {
+		t.Fatalf("Extract.Timeout = %s", cfg.Extract.Timeout)
+	}
+	if cfg.Extract.Docling.ForceOCR != true {
+		t.Fatal("Docling.ForceOCR should be true")
 	}
 }
 
@@ -102,6 +130,21 @@ paths:
 
 	if _, err := Load(path); err == nil {
 		t.Fatal("expected empty path error")
+	}
+}
+
+func TestLoadRejectsInvalidExtractProvider(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	data := []byte(`
+extract:
+  provider: "maybe"
+`)
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("write config fixture: %v", err)
+	}
+
+	if _, err := Load(path); err == nil {
+		t.Fatal("expected invalid extract provider error")
 	}
 }
 

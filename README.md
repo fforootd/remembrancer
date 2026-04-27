@@ -23,32 +23,86 @@ window.
 
 ## Current State
 
-Milestone 0 is implemented:
+The first durable ingest slice is implemented:
 
 - YAML configuration with local development defaults.
 - SQLite migration plumbing.
 - A localhost HTTP server.
 - A health endpoint.
 - A server-rendered HTML shell.
+- Queue-backed watch folder ingest.
+- Docling-backed extraction for PDFs and images.
+- GoReleaser packaging for native binary and `.deb` artifacts.
+
+## Native Setup
+
+Zora is intended to run as a native local service. The Go binary stays CGO-free,
+Docling runs out-of-process in a Python virtual environment, and SQLite/files live
+on the host filesystem.
+
+On macOS:
+
+```sh
+scripts/bootstrap-macos.sh
+```
+
+On Ubuntu:
+
+```sh
+scripts/bootstrap-ubuntu.sh
+```
+
+The macOS bootstrap uses `Brewfile`. The Ubuntu bootstrap uses `apt` for host
+packages and installs `docling-serve[ui]` into `/opt/zora/docling`.
 
 ## Run Locally
 
 ```sh
-go run ./cmd/zora serve --config config/example.yaml
+scripts/run-docling-dev.sh
+scripts/run-zora-dev.sh
 ```
 
 Then open:
 
 - `http://127.0.0.1:8787/`
 - `http://127.0.0.1:8787/healthz`
+- `http://127.0.0.1:5001/docs`
+- `http://127.0.0.1:5001/ui`
 
 The example config writes local development state under `.local/`, which is
 ignored by git.
 
+## Package
+
+GoReleaser builds local release artifacts:
+
+```sh
+CGO_ENABLED=0 go test ./...
+goreleaser check
+goreleaser release --snapshot --clean
+```
+
+Snapshot output is written to `dist/`, including macOS/Linux tarballs,
+checksums, and Ubuntu `.deb` packages. The packaged Ubuntu defaults are:
+
+- Config: `/etc/zora/config.yaml`
+- Data: `/var/lib/zora`
+- Binary: `/usr/bin/zora`
+- Services: `zora.service` and `docling-serve.service`
+
+Docling is not bundled into the Zora package. Install it with the Ubuntu
+bootstrap before starting `docling-serve.service`.
+
+Check build metadata with:
+
+```sh
+zora version
+```
+
 ## Test
 
 ```sh
-go test ./...
+CGO_ENABLED=0 go test ./...
 ```
 
 ## License

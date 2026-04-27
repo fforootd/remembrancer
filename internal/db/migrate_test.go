@@ -77,6 +77,9 @@ func TestMigrateCreatesIngestSchemaAndFTS(t *testing.T) {
 		"artifact_fts",
 		"ingest_job",
 		"watch_file_state",
+		"extracted_document",
+		"artifact_chunk",
+		"artifact_chunk_fts",
 	} {
 		var name string
 		if err := database.QueryRow(`
@@ -95,6 +98,8 @@ INSERT INTO artifact (id, type, source, source_id, title, owner, content_hash, c
 VALUES ('art_1', 'text', 'watch_folder', 'source_1', 'Invoice', 'florian', 'abc', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
 INSERT INTO search_document (artifact_id, title, text, updated_at)
 VALUES ('art_1', 'Invoice', 'Payment is due next week.', '2026-01-01T00:00:00Z');
+INSERT INTO artifact_chunk (id, artifact_id, ordinal, title, text, heading_path, char_start, char_end, created_at)
+VALUES ('chk_1', 'art_1', 0, 'Invoice', 'Payment chunk for search.', 'Invoice', 0, 25, '2026-01-01T00:00:00Z');
 `); err != nil {
 		t.Fatalf("insert FTS fixture: %v", err)
 	}
@@ -110,6 +115,19 @@ WHERE artifact_fts MATCH 'payment'
 	}
 	if artifactID != "art_1" {
 		t.Fatalf("artifactID = %q", artifactID)
+	}
+
+	var chunkID string
+	if err := database.QueryRow(`
+SELECT c.id
+FROM artifact_chunk_fts
+JOIN artifact_chunk c ON c.rowid = artifact_chunk_fts.rowid
+WHERE artifact_chunk_fts MATCH 'chunk'
+`).Scan(&chunkID); err != nil {
+		t.Fatalf("query chunk FTS: %v", err)
+	}
+	if chunkID != "chk_1" {
+		t.Fatalf("chunkID = %q", chunkID)
 	}
 }
 

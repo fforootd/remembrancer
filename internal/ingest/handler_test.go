@@ -3,6 +3,8 @@ package ingest
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -52,11 +54,17 @@ func TestFileHandlerStoresArtifactExtractsTextAndIndexesSearch(t *testing.T) {
 	}
 
 	handler := FileHandler{
-		DB:        database,
-		Blobs:     blobs.Store{ArchiveRoot: archive},
-		Extractor: extract.LocalExtractor{Timeout: time.Minute},
-		Owner:     "florian",
-		Now:       func() time.Time { return now },
+		DB:    database,
+		Blobs: blobs.Store{ArchiveRoot: archive},
+		Extractor: fakeExtractor{result: extract.Result{
+			Text:           "Receipt for payment to utility company.",
+			Markdown:       "# Receipt\n\nReceipt for payment to utility company.",
+			StructuredJSON: `{"docling":true}`,
+			Extractor:      "fake-docling",
+			Status:         "success",
+		}},
+		Owner: "florian",
+		Now:   func() time.Time { return now },
 	}
 
 	resultJSON, err := handler.HandleJob(context.Background(), jobs.Job{PayloadJSON: string(payloadJSON)})
@@ -71,7 +79,7 @@ func TestFileHandlerStoresArtifactExtractsTextAndIndexesSearch(t *testing.T) {
 		t.Fatalf("artifact id = %q", result.ArtifactID)
 	}
 
-	var blobCount, artifactCount, textCount int
+	var blobCount, artifactCount, textCount, documentCount, chunkCount int
 	if err := database.QueryRow(`SELECT COUNT(*) FROM blob WHERE hash = ?`, contentHash).Scan(&blobCount); err != nil {
 		t.Fatalf("count blob: %v", err)
 	}
@@ -81,8 +89,17 @@ func TestFileHandlerStoresArtifactExtractsTextAndIndexesSearch(t *testing.T) {
 	if err := database.QueryRow(`SELECT COUNT(*) FROM extracted_text WHERE artifact_id = ?`, result.ArtifactID).Scan(&textCount); err != nil {
 		t.Fatalf("count extracted_text: %v", err)
 	}
-	if blobCount != 1 || artifactCount != 1 || textCount != 1 {
-		t.Fatalf("counts blob=%d artifact=%d text=%d", blobCount, artifactCount, textCount)
+	if err := database.QueryRow(`SELECT COUNT(*) FROM extracted_document WHERE artifact_id = ?`, result.ArtifactID).Scan(&documentCount); err != nil {
+		t.Fatalf("count extracted_document: %v", err)
+	}
+	if err := database.QueryRow(`SELECT COUNT(*) FROM artifact_chunk WHERE artifact_id = ?`, result.ArtifactID).Scan(&chunkCount); err != nil {
+		t.Fatalf("count artifact_chunk: %v", err)
+	}
+	if blobCount != 1 || artifactCount != 1 || textCount != 1 || documentCount != 1 || chunkCount < 1 {
+		t.Fatalf("counts blob=%d artifact=%d text=%d document=%d chunk=%d", blobCount, artifactCount, textCount, documentCount, chunkCount)
+	}
+	if result.ChunkCount != chunkCount {
+		t.Fatalf("result chunk count = %d, db chunk count = %d", result.ChunkCount, chunkCount)
 	}
 
 	searchResults, err := artifacts.Search(context.Background(), database, "utility", 10)
@@ -91,6 +108,15 @@ func TestFileHandlerStoresArtifactExtractsTextAndIndexesSearch(t *testing.T) {
 	}
 	if len(searchResults) != 1 || searchResults[0].ID != result.ArtifactID {
 		t.Fatalf("search results = %+v", searchResults)
+	}
+	var chunkID string
+	if err := database.QueryRow(`
+SELECT c.id
+FROM artifact_chunk_fts
+JOIN artifact_chunk c ON c.rowid = artifact_chunk_fts.rowid
+WHERE artifact_chunk_fts MATCH 'utility'
+`).Scan(&chunkID); err != nil {
+		t.Fatalf("query chunk FTS: %v", err)
 	}
 }
 
@@ -156,4 +182,102 @@ func TestServiceScanAndWorkOneEndToEnd(t *testing.T) {
 	if len(searchResults) != 1 {
 		t.Fatalf("search results = %+v", searchResults)
 	}
+}
+
+func TestServiceScanAndWorkOneWithDoclingPDF(t *testing.T) {
+	database := newIngestTestDB(t)
+	root := t.TempDir()
+	inbox := filepath.Join(root, "inbox")
+	archive := filepath.Join(root, "archive")
+	if err := os.MkdirAll(inbox, 0o755); err != nil {
+		t.Fatalf("MkdirAll inbox: %v", err)
+	}
+
+	docling := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/convert/file" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"document": map[string]any{
+				"md_content":   "# PDF Note\n\nPlease pay the invoice.",
+				"text_content": "PDF Note\nPlease pay the invoice.",
+				"json_content": map[string]any{"kind": "docling"},
+			},
+			"status":          "success",
+			"processing_time": 0.25,
+			"errors":          []any{},
+		})
+	}))
+	defer docling.Close()
+
+	now := time.Date(2026, 4, 26, 12, 0, 0, 0, time.UTC)
+	writeOldFile(t, filepath.Join(inbox, "invoice.pdf"), []byte("%PDF fake"), now.Add(-time.Hour))
+
+	jobStore := jobs.Store{DB: database}
+	service := Service{
+		Scanner: Scanner{
+			DB:             database,
+			Jobs:           jobStore,
+			Inbox:          inbox,
+			SettleDuration: 10 * time.Second,
+			MaxAttempts:    3,
+			Now:            func() time.Time { return now },
+		},
+		Jobs: jobStore,
+		Handler: FileHandler{
+			DB:    database,
+			Blobs: blobs.Store{ArchiveRoot: archive},
+			Extractor: extract.Router{
+				Text: extract.LocalExtractor{Timeout: time.Minute},
+				Binary: extract.DoclingExtractor{
+					BaseURL:       docling.URL,
+					OutputFormats: []string{"md", "text", "json"},
+					DoOCR:         true,
+					Timeout:       time.Minute,
+				},
+			},
+			Owner: "florian",
+			Now:   func() time.Time { return now },
+		},
+	}
+
+	result, err := service.Scan(context.Background())
+	if err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+	if result.Enqueued != 1 {
+		t.Fatalf("scan result = %+v", result)
+	}
+	worked, err := service.WorkOne(context.Background(), "test-worker")
+	if err != nil {
+		t.Fatalf("WorkOne: %v", err)
+	}
+	if !worked {
+		t.Fatal("WorkOne did not claim a job")
+	}
+
+	searchResults, err := artifacts.Search(context.Background(), database, "invoice", 10)
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(searchResults) != 1 {
+		t.Fatalf("search results = %+v", searchResults)
+	}
+	var markdown string
+	if err := database.QueryRow(`SELECT markdown FROM extracted_document`).Scan(&markdown); err != nil {
+		t.Fatalf("read markdown: %v", err)
+	}
+	if markdown != "# PDF Note\n\nPlease pay the invoice." {
+		t.Fatalf("markdown = %q", markdown)
+	}
+}
+
+type fakeExtractor struct {
+	result extract.Result
+	err    error
+}
+
+func (f fakeExtractor) Extract(ctx context.Context, path string, artifactType string) (extract.Result, error) {
+	return f.result, f.err
 }
