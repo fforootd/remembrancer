@@ -1,159 +1,154 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ .AppName }}</title>
-    <style>{{ template "styles" . }}</style>
+    <title>System status &middot; {{ .AppName }}</title>
+    {{ template "head" . }}
   </head>
   <body>
     {{ template "topbar" . }}
-
     <main>
-      <h2>Hello, {{ .UserName }}</h2>
-      <p class="subtitle">Watch-folder ingestion is ready for local files.</p>
+      <p class="zora-eyebrow">System</p>
+      <h1>System status</h1>
+      <p class="zora-meta">Operational view: ingest queue, extraction, jobs.</p>
 
-      <section class="status" aria-label="Runtime configuration">
-        <div class="panel">
-          <p class="label">Runtime</p>
-          <p class="value">{{ .RuntimePath }}</p>
-        </div>
-        <div class="panel">
-          <p class="label">Archive</p>
-          <p class="value">{{ .ArchivePath }}</p>
-        </div>
-        <div class="panel">
-          <p class="label">Inbox</p>
-          <p class="value">{{ .InboxPath }}</p>
-        </div>
-        <div class="panel">
-          <p class="label">SQLite</p>
-          <p class="value">{{ .SQLitePath }}</p>
-        </div>
-        <div class="panel">
-          <p class="label">Extraction</p>
-          <p class="value">{{ .ExtractProvider }}</p>
-          <p class="meta">{{ .ExtractTimeout }}{{ if .DoclingBaseURL }} &middot; {{ .DoclingBaseURL }}{{ end }}</p>
-          {{ if eq .ExtractProvider "docling" }}
-            <p class="meta">Docling {{ if .DoclingHealth.OK }}ready{{ else }}unreachable{{ end }}{{ if .DoclingHealth.Detail }} &middot; {{ .DoclingHealth.Detail }}{{ end }}</p>
-          {{ end }}
-        </div>
-        <div class="panel">
-          <p class="label">LLM</p>
-          <p class="value">{{ if .LLMEnabled }}enabled{{ else }}disabled{{ end }}</p>
-          <p class="meta">{{ .LLMBaseURL }}{{ if .LLMModel }} / {{ .LLMModel }}{{ end }}</p>
+      <section class="zora-section" aria-label="Runtime configuration">
+        <h2>Runtime</h2>
+        <div class="zora-admin-grid">
+          <article class="zora-item">
+            <p class="zora-eyebrow">Runtime path</p>
+            <p>{{ .RuntimePath }}</p>
+          </article>
+          <article class="zora-item">
+            <p class="zora-eyebrow">Archive</p>
+            <p>{{ .ArchivePath }}</p>
+          </article>
+          <article class="zora-item">
+            <p class="zora-eyebrow">Inbox</p>
+            <p>{{ .InboxPath }}</p>
+          </article>
+          <article class="zora-item">
+            <p class="zora-eyebrow">SQLite</p>
+            <p>{{ .SQLitePath }}</p>
+          </article>
+          <article class="zora-item">
+            <p class="zora-eyebrow">Extraction</p>
+            <p>{{ .ExtractProvider }}</p>
+            <p class="zora-meta">timeout {{ .ExtractTimeout }}{{ if .DoclingBaseURL }} &middot; {{ .DoclingBaseURL }}{{ end }}</p>
+            {{ if eq .ExtractProvider "docling" }}
+              <p class="zora-meta">Docling {{ if .DoclingHealth.OK }}<span class="zora-status-ok">ready</span>{{ else }}<span class="zora-status-error">unreachable</span>{{ end }}{{ if .DoclingHealth.Detail }} &middot; {{ .DoclingHealth.Detail }}{{ end }}</p>
+            {{ end }}
+          </article>
+          <article class="zora-item">
+            <p class="zora-eyebrow">LLM</p>
+            <p>{{ if .LLMEnabled }}<span class="zora-status-ok">enabled</span>{{ else }}<span class="zora-status-warn">disabled</span>{{ end }}</p>
+            <p class="zora-meta">{{ .LLMBaseURL }}{{ if .LLMModel }} / {{ .LLMModel }}{{ end }}</p>
+          </article>
         </div>
       </section>
 
-      <section class="section" aria-label="Ingest controls">
-        <div class="panel">
-          <div class="row">
-            <div>
-              <p class="label">Ingest Queue</p>
-              <p class="value">{{ if .IngestEnabled }}enabled{{ else }}disabled{{ end }}</p>
-              <p class="meta">{{ .IngestWorkers }} workers &middot; scan {{ .ScanInterval }} &middot; settle {{ .SettleDuration }}</p>
-            </div>
-            <form method="post" action="/ingest/scan">
-              <button class="button" type="submit" {{ if not .IngestEnabled }}disabled{{ end }}>Scan now</button>
-            </form>
+      <section class="zora-section" aria-label="Ingest queue">
+        <div class="zora-section-header">
+          <h2>Ingest queue</h2>
+          <form method="post" action="/ingest/scan">
+            <button type="submit" {{ if not .IngestEnabled }}disabled{{ end }}>Scan now</button>
+          </form>
+        </div>
+        <article class="zora-item">
+          <p>{{ if .IngestEnabled }}<span class="zora-status-ok">enabled</span>{{ else }}<span class="zora-status-warn">disabled</span>{{ end }} &middot; {{ .IngestWorkers }} workers &middot; scan {{ .ScanInterval }} &middot; settle {{ .SettleDuration }}</p>
+          <div class="zora-admin-pills" aria-label="Job counts">
+            <span class="zora-chip">queued {{ index .JobCounts "queued" }}</span>
+            <span class="zora-chip">running {{ index .JobCounts "running" }}</span>
+            <span class="zora-chip zora-status-error">failed {{ index .JobCounts "failed" }}</span>
+            <span class="zora-chip zora-status-error">dead {{ index .JobCounts "dead" }}</span>
+            <span class="zora-chip zora-status-ok">succeeded {{ index .JobCounts "succeeded" }}</span>
           </div>
-          <div class="counts" aria-label="Job counts">
-            <span class="pill">queued {{ index .JobCounts "queued" }}</span>
-            <span class="pill">running {{ index .JobCounts "running" }}</span>
-            <span class="pill">failed {{ index .JobCounts "failed" }}</span>
-            <span class="pill">dead {{ index .JobCounts "dead" }}</span>
-            <span class="pill">succeeded {{ index .JobCounts "succeeded" }}</span>
+          <div class="zora-admin-pills" aria-label="Chunk counts">
+            <span class="zora-chip">chunks {{ .ChunkStats.Chunks }}</span>
+            <span class="zora-chip">chunked artifacts {{ .ChunkStats.Artifacts }}</span>
           </div>
-          <div class="counts" aria-label="Chunk counts">
-            <span class="pill">chunks {{ .ChunkStats.Chunks }}</span>
-            <span class="pill">chunked artifacts {{ .ChunkStats.Artifacts }}</span>
+          <div class="zora-admin-pills" aria-label="Watch folder counts">
+            <span class="zora-chip">seen {{ .WatchStats.Seen }}</span>
+            <span class="zora-chip">supported {{ .WatchStats.Supported }}</span>
+            <span class="zora-chip">ignored {{ .WatchStats.Ignored }}</span>
           </div>
-          <div class="counts" aria-label="Watch folder counts">
-            <span class="pill">seen {{ .WatchStats.Seen }}</span>
-            <span class="pill">supported {{ .WatchStats.Supported }}</span>
-            <span class="pill">ignored {{ .WatchStats.Ignored }}</span>
-          </div>
-          {{ if .LastExtractError }}<p class="meta error">Last extraction error: {{ .LastExtractError }}</p>{{ end }}
+          {{ if .LastExtractError }}<p class="zora-meta zora-status-error" style="margin-top:10px">Last extraction error: {{ .LastExtractError }}</p>{{ end }}
           {{ if .HasLastScan }}
-            <p class="meta">Last scan: {{ .LastScan.ScannedAt }} &middot; seen {{ .LastScan.Seen }} &middot; enqueued {{ .LastScan.Enqueued }} &middot; existing {{ .LastScan.Existing }} &middot; settling {{ .LastScan.Settling }}{{ if .LastScanError }} &middot; <span class="error">{{ .LastScanError }}</span>{{ end }}</p>
+            <p class="zora-meta" style="margin-top:10px">Last scan: {{ humaneDate .LastScan.ScannedAt }} &middot; seen {{ .LastScan.Seen }} &middot; enqueued {{ .LastScan.Enqueued }} &middot; existing {{ .LastScan.Existing }} &middot; settling {{ .LastScan.Settling }}{{ if .LastScanError }} &middot; <span class="zora-status-error">{{ .LastScanError }}</span>{{ end }}</p>
           {{ end }}
-        </div>
+        </article>
       </section>
 
-      <section class="section" aria-label="Recent artifacts">
-        <h2>Recent Artifacts</h2>
-        <div class="list">
-          {{ range .RecentArtifacts }}
-            <a class="item-link" href="/artifacts/{{ .ID }}">
-              <div class="item">
-                <div class="row">
-                  <div>
-                    <p><strong>{{ .Title }}</strong></p>
-                    <p class="meta">{{ .Type }} &middot; {{ .ID }}{{ if .HasText }} &middot; text ready{{ end }}{{ if .ChunkCount }} &middot; {{ .ChunkCount }} chunks{{ end }}</p>
-                  </div>
+      <section class="zora-section" aria-label="Recent jobs">
+        <div class="zora-section-header">
+          <h2>Recent jobs</h2>
+          <p class="zora-meta">Newest first</p>
+        </div>
+        <div class="zora-stack">
+          {{ range .RecentJobs }}
+            <a class="zora-item-link" href="/jobs/{{ .ID }}">
+              <article class="zora-item">
+                <div class="zora-chips">
+                  <span class="zora-chip">{{ .Kind }}</span>
+                  <span class="zora-chip {{ .Status }}">{{ .Status }}</span>
+                  <span class="zora-chip">attempts {{ .Attempts }}/{{ .MaxAttempts }}</span>
                 </div>
-                {{ if .TextPreview.Valid }}<p class="meta">{{ .TextPreview.String }}</p>{{ end }}
-              </div>
+                <p class="zora-meta" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">{{ .ID }}</p>
+                {{ if .LastError.Valid }}<p class="zora-meta zora-status-error">{{ .LastError.String }}</p>{{ end }}
+              </article>
             </a>
           {{ else }}
-            <p class="subtitle">No artifacts ingested yet.</p>
+            <p class="zora-meta">No jobs yet.</p>
           {{ end }}
         </div>
       </section>
 
-      <section class="section" aria-label="Action items">
-        <h2>Action Items</h2>
-        <div class="panel">
-          <p class="label">LLM reasoning</p>
-          <p class="value">{{ if .LLMEnabled }}enabled{{ else }}candidate preview only{{ end }}</p>
-          <p class="meta">{{ .LLMBaseURL }}{{ if .LLMModel }} / {{ .LLMModel }}{{ end }}</p>
-          <form class="inline-form" method="post" action="/action-items">
-            <label class="field">
-              <span class="label">Start</span>
+      <section class="zora-section" aria-label="Recent artifacts">
+        <div class="zora-section-header">
+          <h2>Recent artifacts</h2>
+          <p class="zora-meta"><a href="/library">Open library &rarr;</a></p>
+        </div>
+        <div class="zora-stack">
+          {{ range .RecentArtifacts }}
+            {{ template "artifactCard" . }}
+          {{ else }}
+            <p class="zora-meta">No artifacts ingested yet.</p>
+          {{ end }}
+        </div>
+      </section>
+
+      <section class="zora-section" aria-label="Action item runs">
+        <div class="zora-section-header">
+          <h2>Briefings</h2>
+          <p class="zora-meta"><a href="/briefings">Open briefings &rarr;</a></p>
+        </div>
+        <article class="zora-item">
+          <p class="zora-meta">LLM reasoning is {{ if .LLMEnabled }}<span class="zora-status-ok">enabled</span>{{ else }}<span class="zora-status-warn">disabled</span>{{ end }}{{ if .LLMModel }} &middot; {{ .LLMModel }}{{ end }}</p>
+          <form class="zora-inline-form" method="post" action="/action-items" style="margin-top:12px">
+            <label>
+              <span>Start</span>
               <input type="date" name="period_start" required>
             </label>
-            <label class="field">
-              <span class="label">End</span>
+            <label>
+              <span>End</span>
               <input type="date" name="period_end" required>
             </label>
-            <button class="button" type="submit">{{ if .LLMEnabled }}Generate{{ else }}Preview candidates{{ end }}</button>
+            <button type="submit">{{ if .LLMEnabled }}Generate briefing{{ else }}Preview candidates{{ end }}</button>
           </form>
-          <p class="meta"><a href="/action-items">Open action item workspace</a></p>
-        </div>
-        <div class="list">
+        </article>
+        <div class="zora-stack" style="margin-top:14px">
           {{ range .RecentActionRuns }}
-            <a class="item-link" href="/briefings/{{ .ID }}">
-              <div class="item">
-                <p><strong>{{ .Title }}</strong></p>
-                <p class="meta">{{ .ItemCount }} items &middot; {{ .ModelName }} &middot; {{ .CreatedAt }}</p>
-              </div>
+            <a class="zora-item-link" href="/briefings/{{ .ID }}">
+              <article class="zora-item">
+                <p class="zora-item-title">{{ .Title }}</p>
+                <p class="zora-meta">{{ .ItemCount }} item{{ if ne .ItemCount 1 }}s{{ end }} &middot; {{ humaneDate .CreatedAt }}{{ if .ModelName }} &middot; {{ .ModelName }}{{ end }}</p>
+              </article>
             </a>
           {{ else }}
-            <p class="subtitle">No action item runs yet.</p>
-          {{ end }}
-        </div>
-      </section>
-
-      <section class="section" aria-label="Recent jobs">
-        <h2>Recent Jobs</h2>
-        <div class="list">
-          {{ range .RecentJobs }}
-            <a class="item-link" href="/jobs/{{ .ID }}">
-              <div class="item">
-                <div class="row">
-                  <div>
-                    <p><strong>{{ .Kind }}</strong></p>
-                    <p class="meta">{{ .ID }} &middot; <span class="pill {{ .Status }}">{{ .Status }}</span> &middot; attempts {{ .Attempts }}/{{ .MaxAttempts }}</p>
-                  </div>
-                </div>
-                {{ if .LastError.Valid }}<p class="meta error">{{ .LastError.String }}</p>{{ end }}
-              </div>
-            </a>
-          {{ else }}
-            <p class="subtitle">No jobs yet.</p>
+            <p class="zora-meta">No briefings yet.</p>
           {{ end }}
         </div>
       </section>
     </main>
+    {{ template "footer" . }}
   </body>
 </html>

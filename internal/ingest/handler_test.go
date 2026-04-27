@@ -14,6 +14,7 @@ import (
 	"zora/internal/blobs"
 	"zora/internal/extract"
 	"zora/internal/jobs"
+	"zora/internal/pipeline"
 )
 
 func TestFileHandlerStoresArtifactExtractsTextAndIndexesSearch(t *testing.T) {
@@ -63,8 +64,9 @@ func TestFileHandlerStoresArtifactExtractsTextAndIndexesSearch(t *testing.T) {
 			Extractor:      "fake-docling",
 			Status:         "success",
 		}},
-		Owner: "florian",
-		Now:   func() time.Time { return now },
+		Pipeline: &pipeline.Runner{DB: database, Now: func() time.Time { return now }},
+		Owner:    "florian",
+		Now:      func() time.Time { return now },
 	}
 
 	resultJSON, err := handler.HandleJob(context.Background(), jobs.Job{PayloadJSON: string(payloadJSON)})
@@ -79,7 +81,7 @@ func TestFileHandlerStoresArtifactExtractsTextAndIndexesSearch(t *testing.T) {
 		t.Fatalf("artifact id = %q", result.ArtifactID)
 	}
 
-	var blobCount, artifactCount, textCount, documentCount, chunkCount int
+	var blobCount, artifactCount, textCount, documentCount, chunkCount, evidenceCount, classCount int
 	if err := database.QueryRow(`SELECT COUNT(*) FROM blob WHERE hash = ?`, contentHash).Scan(&blobCount); err != nil {
 		t.Fatalf("count blob: %v", err)
 	}
@@ -95,8 +97,17 @@ func TestFileHandlerStoresArtifactExtractsTextAndIndexesSearch(t *testing.T) {
 	if err := database.QueryRow(`SELECT COUNT(*) FROM artifact_chunk WHERE artifact_id = ?`, result.ArtifactID).Scan(&chunkCount); err != nil {
 		t.Fatalf("count artifact_chunk: %v", err)
 	}
+	if err := database.QueryRow(`SELECT COUNT(*) FROM evidence WHERE artifact_id = ?`, result.ArtifactID).Scan(&evidenceCount); err != nil {
+		t.Fatalf("count evidence: %v", err)
+	}
+	if err := database.QueryRow(`SELECT COUNT(*) FROM artifact_classification WHERE artifact_id = ?`, result.ArtifactID).Scan(&classCount); err != nil {
+		t.Fatalf("count artifact_classification: %v", err)
+	}
 	if blobCount != 1 || artifactCount != 1 || textCount != 1 || documentCount != 1 || chunkCount < 1 {
 		t.Fatalf("counts blob=%d artifact=%d text=%d document=%d chunk=%d", blobCount, artifactCount, textCount, documentCount, chunkCount)
+	}
+	if evidenceCount < 1 || classCount != 1 {
+		t.Fatalf("pipeline counts evidence=%d class=%d", evidenceCount, classCount)
 	}
 	if result.ChunkCount != chunkCount {
 		t.Fatalf("result chunk count = %d, db chunk count = %d", result.ChunkCount, chunkCount)

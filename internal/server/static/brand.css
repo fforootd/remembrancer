@@ -1,0 +1,738 @@
+:root {
+  --pico-font-family-sans-serif: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", sans-serif;
+  --pico-font-size: 16px;
+  --pico-line-height: 1.55;
+  --pico-border-radius: 10px;
+
+  --pico-background-color: #f7f5ef;
+  --pico-color: #1f2024;
+  --pico-muted-color: #6a6d72;
+  --pico-muted-border-color: #e0ddd4;
+  --pico-border-color: #dcd9d0;
+
+  --pico-h1-color: var(--pico-color);
+  --pico-h2-color: var(--pico-color);
+  --pico-h3-color: var(--pico-color);
+
+  --pico-card-background-color: #ffffff;
+  --pico-card-border-color: #e3e0d6;
+  --pico-card-sectioning-background-color: #fbf9f3;
+
+  --pico-primary: #1f6f63;
+  --pico-primary-background: #1f6f63;
+  --pico-primary-border: #1f6f63;
+  --pico-primary-hover: #185a51;
+  --pico-primary-hover-background: #185a51;
+  --pico-primary-hover-border: #185a51;
+  --pico-primary-focus: rgba(31, 111, 99, 0.25);
+  --pico-primary-inverse: #ffffff;
+  --pico-primary-underline: rgba(31, 111, 99, 0.4);
+  --pico-primary-hover-underline: rgba(31, 111, 99, 0.7);
+
+  --pico-form-element-background-color: #ffffff;
+  --pico-form-element-border-color: #d8d4ca;
+
+  --pico-code-background-color: #f0eee5;
+  --pico-code-color: #1f2024;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --pico-background-color: #14161a;
+    --pico-color: #e6e7ea;
+    --pico-muted-color: #9aa0a8;
+    --pico-muted-border-color: #2a2d33;
+    --pico-border-color: #2c2f36;
+
+    --pico-card-background-color: #1d2026;
+    --pico-card-border-color: #2c2f36;
+    --pico-card-sectioning-background-color: #21242b;
+
+    --pico-primary: #6dc7b7;
+    --pico-primary-background: #6dc7b7;
+    --pico-primary-border: #6dc7b7;
+    --pico-primary-hover: #87d4c5;
+    --pico-primary-hover-background: #87d4c5;
+    --pico-primary-hover-border: #87d4c5;
+    --pico-primary-focus: rgba(109, 199, 183, 0.25);
+    --pico-primary-inverse: #14161a;
+
+    --pico-form-element-background-color: #1d2026;
+    --pico-form-element-border-color: #2c2f36;
+
+    --pico-code-background-color: #21242b;
+    --pico-code-color: #e6e7ea;
+  }
+}
+
+/* --- Layout chrome --- */
+
+body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+main {
+  flex: 1 0 auto;
+  width: min(960px, calc(100vw - 32px));
+  margin: 0 auto;
+  padding: 32px 0 56px;
+}
+
+.zora-header {
+  border-bottom: 1px solid var(--pico-muted-border-color);
+  background: var(--pico-card-background-color);
+}
+
+.zora-header-inner {
+  width: min(960px, calc(100vw - 32px));
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 18px 0;
+}
+
+.zora-brand {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--pico-color);
+  text-decoration: none;
+  letter-spacing: -0.01em;
+}
+
+.zora-brand small {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 400;
+  color: var(--pico-muted-color);
+  margin-top: 2px;
+  letter-spacing: 0;
+}
+
+.zora-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.zora-nav a {
+  --pico-color: var(--pico-muted-color);
+  padding: 6px 12px;
+  border-radius: 999px;
+  text-decoration: none;
+  font-size: 0.92rem;
+  border: 1px solid transparent;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
+}
+
+.zora-nav a:hover { color: var(--pico-primary); }
+
+.zora-nav a[aria-current="page"] {
+  color: var(--pico-primary);
+  border-color: var(--pico-primary);
+  background: var(--pico-card-sectioning-background-color);
+}
+
+.zora-footer {
+  flex-shrink: 0;
+  border-top: 1px solid var(--pico-muted-border-color);
+  background: var(--pico-card-background-color);
+  font-size: 0.85rem;
+  color: var(--pico-muted-color);
+}
+
+.zora-footer-inner {
+  width: min(960px, calc(100vw - 32px));
+  margin: 0 auto;
+  padding: 14px 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.zora-footer a {
+  color: var(--pico-muted-color);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--pico-muted-border-color);
+}
+
+.zora-footer a:hover {
+  color: var(--pico-primary);
+  border-bottom-color: var(--pico-primary);
+}
+
+/* --- Typography --- */
+
+h1, h2, h3 {
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+h1 { font-size: 1.6rem; font-weight: 700; line-height: 1.25; }
+h2 { font-size: 1.25rem; font-weight: 700; line-height: 1.3; }
+h3 { font-size: 1rem; font-weight: 700; line-height: 1.35; }
+
+.zora-eyebrow {
+  display: inline-block;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--pico-muted-color);
+  margin: 0 0 12px;
+}
+
+.zora-meta {
+  color: var(--pico-muted-color);
+  font-size: 0.9rem;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.zora-meta + .zora-meta { margin-top: 4px; }
+
+.zora-back {
+  display: inline-block;
+  margin-bottom: 16px;
+  font-size: 0.9rem;
+  color: var(--pico-muted-color);
+  text-decoration: none;
+}
+
+.zora-back:hover { color: var(--pico-primary); }
+
+/* --- Hero (Today greeting) --- */
+
+.zora-hero {
+  margin-bottom: 32px;
+}
+
+.zora-hero h1 {
+  font-size: 1.75rem;
+  margin-bottom: 4px;
+}
+
+.zora-hero p {
+  color: var(--pico-muted-color);
+  margin: 0;
+  font-size: 1rem;
+}
+
+/* --- Sections --- */
+
+.zora-section {
+  margin-top: 36px;
+}
+
+.zora-section-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.zora-section-header h2 {
+  font-size: 1.05rem;
+}
+
+.zora-section-header .zora-meta {
+  font-size: 0.85rem;
+}
+
+/* --- Item cards (briefing items, library cards) --- */
+
+.zora-stack {
+  display: grid;
+  gap: 12px;
+}
+
+.zora-item {
+  border: 1px solid var(--pico-card-border-color);
+  border-radius: var(--pico-border-radius);
+  background: var(--pico-card-background-color);
+  padding: 16px 18px;
+  margin: 0;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+
+.zora-item:hover {
+  border-color: var(--pico-primary);
+}
+
+a.zora-item-link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+a.zora-item-link:hover .zora-item,
+a.zora-item-link:focus-visible .zora-item {
+  border-color: var(--pico-primary);
+  outline: none;
+}
+
+.zora-item-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  line-height: 1.35;
+  margin: 0 0 6px;
+  color: var(--pico-color);
+}
+
+.zora-item-summary {
+  margin: 0 0 8px;
+  color: var(--pico-color);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.zora-item-why {
+  margin: 8px 0 0;
+  color: var(--pico-muted-color);
+  font-size: 0.88rem;
+  line-height: 1.45;
+  font-style: italic;
+}
+
+.zora-item-source {
+  margin: 12px 0 0;
+  color: var(--pico-muted-color);
+  font-size: 0.85rem;
+}
+
+.zora-item-source a {
+  color: var(--pico-muted-color);
+  border-bottom: 1px dotted var(--pico-muted-border-color);
+  text-decoration: none;
+}
+
+.zora-item-source a:hover {
+  color: var(--pico-primary);
+  border-bottom-color: var(--pico-primary);
+}
+
+.zora-item-row {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+/* --- Chips (urgency, category, status) --- */
+
+.zora-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 8px;
+}
+
+.zora-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  border: 1px solid var(--pico-muted-border-color);
+  background: var(--pico-card-sectioning-background-color);
+  color: var(--pico-muted-color);
+  white-space: nowrap;
+}
+
+.zora-chip--accent {
+  border-color: var(--pico-primary);
+  color: var(--pico-primary);
+  background: transparent;
+}
+
+.zora-chip--soon {
+  border-color: #c75a3a;
+  color: #c75a3a;
+  background: transparent;
+}
+
+.zora-chip--week {
+  border-color: #b08400;
+  color: #b08400;
+  background: transparent;
+}
+
+.zora-chip--later {
+  border-color: var(--pico-muted-border-color);
+  color: var(--pico-muted-color);
+}
+
+.zora-chip--review {
+  border-color: #b08400;
+  color: #b08400;
+  background: transparent;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .zora-chip--soon {
+    border-color: #ef8a6a; color: #ef8a6a;
+  }
+  :root:not([data-theme="light"]) .zora-chip--week,
+  :root:not([data-theme="light"]) .zora-chip--review {
+    border-color: #d8b34c; color: #d8b34c;
+  }
+}
+
+/* --- Stubbed actions --- */
+
+.zora-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--pico-muted-border-color);
+}
+
+.zora-actions button,
+.zora-actions a.zora-actions-link {
+  appearance: none;
+  background: transparent;
+  border: 1px solid var(--pico-muted-border-color);
+  color: var(--pico-muted-color);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  text-decoration: none;
+  line-height: 1.4;
+}
+
+.zora-actions button:hover,
+.zora-actions a.zora-actions-link:hover {
+  border-color: var(--pico-primary);
+  color: var(--pico-primary);
+}
+
+.zora-actions a.zora-actions-link[aria-current="page"] {
+  color: var(--pico-primary);
+  border-color: var(--pico-primary);
+}
+
+/* --- Empty state --- */
+
+.zora-empty {
+  border: 1px dashed var(--pico-muted-border-color);
+  border-radius: var(--pico-border-radius);
+  padding: 24px;
+  text-align: center;
+  color: var(--pico-muted-color);
+  background: var(--pico-card-sectioning-background-color);
+}
+
+.zora-empty h2 {
+  color: var(--pico-color);
+  margin-bottom: 6px;
+  font-size: 1.05rem;
+}
+
+.zora-empty p {
+  margin: 0 0 14px;
+  font-size: 0.92rem;
+}
+
+.zora-empty form {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+}
+
+.zora-empty input[type="date"] {
+  width: auto;
+  padding: 8px 10px;
+  font-size: 0.88rem;
+}
+
+/* --- Inline form (admin, search, briefings) --- */
+
+.zora-inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+  margin: 0;
+}
+
+.zora-inline-form label {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+
+.zora-inline-form label > span {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--pico-muted-color);
+}
+
+.zora-inline-form input,
+.zora-inline-form select {
+  margin: 0;
+  padding: 8px 12px;
+  font-size: 0.95rem;
+}
+
+.zora-inline-form button {
+  margin: 0;
+  padding: 9px 18px;
+}
+
+/* --- Search-specific --- */
+
+.zora-search {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.zora-search input[type="search"] {
+  flex: 1;
+  min-width: 240px;
+  font-size: 1rem;
+  padding: 10px 14px;
+}
+
+/* --- Library grouping --- */
+
+.zora-library-group {
+  margin-top: 28px;
+}
+
+.zora-library-group h3 {
+  font-size: 0.92rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--pico-muted-color);
+  margin-bottom: 10px;
+}
+
+/* --- Admin --- */
+
+.zora-admin-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.zora-admin-grid .zora-item p {
+  margin: 0;
+}
+
+.zora-admin-grid .zora-eyebrow {
+  margin-bottom: 6px;
+}
+
+.zora-admin-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.zora-admin-pills .zora-chip {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-weight: 500;
+  font-size: 0.78rem;
+}
+
+.zora-status-ok { border-color: var(--pico-primary); color: var(--pico-primary); }
+.zora-status-warn { border-color: #b08400; color: #b08400; }
+.zora-status-error { border-color: #9b1c1c; color: #9b1c1c; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .zora-status-warn { border-color: #d8b34c; color: #d8b34c; }
+  :root:not([data-theme="light"]) .zora-status-error { border-color: #ef6a6a; color: #ef6a6a; }
+}
+
+/* --- Technical-details disclosure on artifact page --- */
+
+.zora-tech details {
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: var(--pico-border-radius);
+  background: var(--pico-card-sectioning-background-color);
+  padding: 0;
+}
+
+.zora-tech details > summary {
+  cursor: pointer;
+  padding: 12px 16px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--pico-muted-color);
+  list-style: none;
+}
+
+.zora-tech details > summary::-webkit-details-marker { display: none; }
+
+.zora-tech details > summary::before {
+  content: "▸ ";
+  color: var(--pico-muted-color);
+}
+
+.zora-tech details[open] > summary::before { content: "▾ "; }
+
+.zora-tech details > div {
+  padding: 0 16px 16px;
+}
+
+.zora-tech .zora-props {
+  display: grid;
+  grid-template-columns: minmax(140px, max-content) 1fr;
+  gap: 6px 16px;
+  font-size: 0.88rem;
+  margin: 0;
+}
+
+.zora-tech .zora-props dt {
+  color: var(--pico-muted-color);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  align-self: center;
+}
+
+.zora-tech .zora-props dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.82rem;
+}
+
+.zora-tech pre {
+  background: var(--pico-code-background-color);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  max-height: 400px;
+  overflow: auto;
+  margin: 8px 0 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.zora-tech .zora-tech-nested {
+  margin-top: 12px;
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: 6px;
+  background: var(--pico-card-background-color);
+}
+
+.zora-tech .zora-tech-nested > summary {
+  padding: 8px 12px;
+  font-size: 0.82rem;
+}
+
+/* --- Preview blocks (artifact page) --- */
+
+.zora-preview {
+  border: 1px solid var(--pico-card-border-color);
+  border-radius: var(--pico-border-radius);
+  background: var(--pico-card-background-color);
+  padding: 16px;
+  margin-bottom: 24px;
+}
+
+.zora-preview img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+
+.zora-preview object,
+.zora-preview iframe {
+  width: 100%;
+  border: none;
+  border-radius: 6px;
+  background: var(--pico-card-sectioning-background-color);
+}
+
+.zora-preview-pdf {
+  height: 560px;
+}
+
+/* --- Briefing-style category groups --- */
+
+.zora-category {
+  margin-top: 28px;
+}
+
+.zora-category > h3 {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.92rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--pico-muted-color);
+  margin-bottom: 10px;
+}
+
+.zora-category-count {
+  font-size: 0.78rem;
+  color: var(--pico-muted-color);
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* --- Subtle alert (errors at top of page) --- */
+
+.zora-alert {
+  border: 1px solid var(--pico-card-border-color);
+  border-radius: var(--pico-border-radius);
+  background: var(--pico-card-background-color);
+  padding: 14px 16px;
+  margin: 0 0 16px;
+}
+
+.zora-alert--error { border-color: #9b1c1c; }
+.zora-alert--error strong { color: #9b1c1c; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .zora-alert--error { border-color: #ef6a6a; }
+  :root:not([data-theme="light"]) .zora-alert--error strong { color: #ef6a6a; }
+}
+
+@media (max-width: 600px) {
+  main { padding: 20px 0 40px; }
+
+  .zora-header-inner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 14px 0;
+  }
+
+  .zora-hero h1 { font-size: 1.4rem; }
+
+  .zora-tech .zora-props {
+    grid-template-columns: 1fr;
+    gap: 2px 0;
+  }
+
+  .zora-tech .zora-props dd { margin-bottom: 8px; }
+
+  .zora-preview-pdf { height: 420px; }
+}

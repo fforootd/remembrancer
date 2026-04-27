@@ -1,68 +1,60 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Search · {{ .AppName }}</title>
-    <style>{{ template "styles" . }}</style>
+    <title>Search &middot; {{ .AppName }}</title>
+    {{ template "head" . }}
   </head>
   <body>
     {{ template "topbar" . }}
     <main>
-      <h2>Search</h2>
-      <p class="subtitle">Full-text search across extracted artifact text.</p>
+      <p class="zora-eyebrow">Search</p>
+      <h1>Ask your archive</h1>
+      <p class="zora-meta">Find anything Zora has on file &mdash; contracts, prescriptions, school forms, invoices, photos.</p>
 
-      <section class="section" aria-label="Search query">
-        <div class="panel">
-          <form class="inline-form" method="get" action="/search">
-            <label class="field" style="flex:1;min-width:240px;">
-              <span class="label">Query</span>
-              <input type="search" name="q" value="{{ .Query }}" placeholder="bills, school, passport…" autofocus>
-            </label>
-            <label class="field">
-              <span class="label">Type</span>
-              <select name="type">
-                {{ $current := .Type }}
-                {{ range .Types }}
-                  <option value="{{ . }}" {{ if eq . $current }}selected{{ end }}>{{ . }}</option>
-                {{ end }}
-              </select>
-            </label>
-            <button class="button" type="submit">Search</button>
+      <section class="zora-section" aria-label="Search query">
+        <article class="zora-item">
+          <form class="zora-search" method="get" action="/search">
+            <input type="search" name="q" value="{{ .Query }}" placeholder="contract, prescription, school form, invoice&hellip;" autofocus aria-label="Search query">
+            <select name="type" aria-label="Type filter">
+              {{ $current := .Type }}
+              {{ range .Types }}
+                <option value="{{ . }}" {{ if eq . $current }}selected{{ end }}>{{ if eq . "all" }}All types{{ else }}{{ humaneTypePlural . }}{{ end }}</option>
+              {{ end }}
+            </select>
+            <button type="submit">Search</button>
           </form>
-          {{ if .ErrorMessage }}<p class="meta error" style="margin-top:8px">{{ .ErrorMessage }}</p>{{ end }}
-        </div>
+          {{ if .ErrorMessage }}<p class="zora-meta zora-status-error" style="margin-top:8px">{{ .ErrorMessage }}</p>{{ end }}
+        </article>
       </section>
 
       {{ if .HasResults }}
-        <section class="section" aria-label="Search results">
-          <h3>{{ len .Results }} result{{ if ne (len .Results) 1 }}s{{ end }}</h3>
+        <section class="zora-section" aria-label="Search results">
+          <div class="zora-section-header">
+            <h2>{{ len .Results }} result{{ if ne (len .Results) 1 }}s{{ end }}</h2>
+            <p class="zora-meta">for &ldquo;{{ .Query }}&rdquo;</p>
+          </div>
           {{ $query := .Query }}
-          <div class="list">
+          <div class="zora-stack">
             {{ range .Results }}
-              <a class="item-link" href="/artifacts/{{ .ID }}">
-                <div class="item">
-                  <div class="row">
-                    <div>
-                      <p><strong>{{ if .Title }}{{ .Title }}{{ else }}Untitled artifact{{ end }}</strong></p>
-                      <p class="meta">
-                        <span class="pill">{{ .Type }}</span>
-                        &middot; {{ .ID }}
-                        {{ if .EventAt.Valid }}&middot; {{ .EventAt.String }}{{ end }}
-                      </p>
-                    </div>
-                  </div>
-                  {{ if .Snippet }}<p class="meta">{{ .Snippet }}</p>{{ end }}
-                </div>
+              <a class="zora-item-link" href="/library/{{ .ID }}">
+                <article class="zora-item">
+                  <p class="zora-item-title">{{ if .Title }}{{ .Title }}{{ else }}Untitled {{ humaneType .Type }}{{ end }}</p>
+                  <p class="zora-meta">{{ humaneType .Type }}{{ if .EventAt.Valid }} &middot; {{ humaneDate .EventAt.String }}{{ end }}</p>
+                  {{ if .Snippet }}<p class="zora-item-summary">&hellip;{{ .Snippet }}&hellip;</p>{{ end }}
+                </article>
               </a>
             {{ else }}
-              <p class="empty">No matches for "{{ $query }}".</p>
+              <div class="zora-empty">
+                <h2>No matches</h2>
+                <p>Nothing in your archive matched &ldquo;{{ $query }}&rdquo;. Try a different word or remove the type filter.</p>
+              </div>
             {{ end }}
           </div>
         </section>
       {{ else if not .Query }}
-        <p class="subtitle">Enter a query above to search the archive.</p>
+        <p class="zora-meta">Type a query above to search across the full text of every ingested item.</p>
       {{ end }}
     </main>
+    {{ template "footer" . }}
   </body>
 </html>

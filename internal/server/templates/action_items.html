@@ -1,88 +1,63 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Action Items · {{ .AppName }}</title>
-    <style>{{ template "styles" . }}</style>
+    <title>Briefing preview &middot; {{ .AppName }}</title>
+    {{ template "head" . }}
   </head>
   <body>
     {{ template "topbar" . }}
     <main>
-      <a class="back" href="/">Back to dashboard</a>
-      <h2>Action Items</h2>
-      <p class="subtitle">{{ if .LLMEnabled }}Generate source-linked action items with {{ .LLMModel }}.{{ else }}LLM is disabled; this page previews deterministic candidates only.{{ end }}</p>
+      <a class="zora-back" href="/briefings">&larr; Briefings</a>
+      <p class="zora-eyebrow">Briefing preview</p>
+      <h1>Briefing candidates</h1>
+      <p class="zora-meta">{{ if .LLMEnabled }}Generating with {{ .LLMModel }}.{{ else }}Reasoning is off &mdash; this view shows only the deterministic candidate selection.{{ end }}</p>
 
       {{ if .ErrorMessage }}
-        <section class="section" aria-label="Action item error">
-          <div class="alert error-alert">
-            <p><strong>Generation failed</strong></p>
-            <p class="meta">{{ .ErrorMessage }}</p>
-          </div>
-        </section>
+        <div class="zora-alert zora-alert--error">
+          <p><strong>Generation failed.</strong> {{ .ErrorMessage }}</p>
+        </div>
       {{ end }}
 
-      <section class="section" aria-label="Action item generator">
-        <div class="panel">
-          <form class="inline-form" method="post" action="/action-items">
-            <label class="field">
-              <span class="label">Start</span>
+      <section class="zora-section" aria-label="Re-run">
+        <article class="zora-item">
+          <form class="zora-inline-form" method="post" action="/action-items">
+            <label>
+              <span>Start</span>
               <input type="date" name="period_start" value="{{ .PeriodStartDate }}" required>
             </label>
-            <label class="field">
-              <span class="label">End</span>
+            <label>
+              <span>End</span>
               <input type="date" name="period_end" value="{{ .PeriodEndDate }}" required>
             </label>
-            <button class="button" type="submit">{{ if .LLMEnabled }}Generate{{ else }}Preview candidates{{ end }}</button>
+            <button type="submit">{{ if .LLMEnabled }}Generate{{ else }}Preview candidates{{ end }}</button>
           </form>
-        </div>
-      </section>
-
-      <section class="section" aria-label="Recent action item runs">
-        <h2>Recent Runs</h2>
-        <div class="list">
-          {{ range .RecentRuns }}
-            <a class="item-link" href="/briefings/{{ .ID }}">
-              <div class="item">
-                <div class="row">
-                  <div>
-                    <p><strong>{{ .Title }}</strong></p>
-                    <p class="meta">{{ .ItemCount }} items &middot; {{ .ModelName }} &middot; {{ .CreatedAt }}</p>
-                  </div>
-                </div>
-              </div>
-            </a>
-          {{ else }}
-            <p class="empty">No action item runs yet.</p>
-          {{ end }}
-        </div>
+        </article>
       </section>
 
       {{ if .Previewed }}
-        <section class="section" aria-label="Candidate preview">
-          <h2>Candidate Preview</h2>
-          <div class="list">
+        <section class="zora-section" aria-label="Candidates">
+          <h2>Candidates ({{ len .Candidates }})</h2>
+          <div class="zora-stack">
             {{ range .Candidates }}
-              <a class="item-link" href="/artifacts/{{ .ArtifactID }}">
-                <div class="item">
-                  <div class="row">
-                    <div>
-                      <p><strong>{{ .Title }}</strong></p>
-                      <p class="meta">{{ .Type }} &middot; {{ .ArtifactID }} &middot; score {{ .Score }}{{ if .EventAt }} &middot; {{ .EventAt }}{{ end }}</p>
+              <a class="zora-item-link" href="/library/{{ .ArtifactID }}">
+                <article class="zora-item">
+                  <p class="zora-item-title">{{ .Title }}</p>
+                  <p class="zora-meta">{{ humaneType .Type }}{{ if .EventAt }} &middot; {{ humaneDate .EventAt }}{{ end }} &middot; score {{ .Score }}</p>
+                  {{ if .Signals }}
+                    <div class="zora-chips" style="margin-top:6px">
+                      {{ range .Signals }}<span class="zora-chip">{{ . }}</span>{{ end }}
                     </div>
-                  </div>
-                  <div class="counts">
-                    {{ range .Signals }}<span class="pill">{{ . }}</span>{{ end }}
-                  </div>
-                  {{ if .Evidence }}<p class="meta">{{ .Evidence }}</p>{{ end }}
-                </div>
+                  {{ end }}
+                  {{ if .Evidence }}<p class="zora-item-summary">{{ .Evidence }}</p>{{ end }}
+                </article>
               </a>
             {{ else }}
-              <p class="empty">No candidates found for this period.</p>
+              <p class="zora-meta">No candidates found for this period.</p>
             {{ end }}
           </div>
         </section>
       {{ end }}
     </main>
+    {{ template "footer" . }}
   </body>
 </html>

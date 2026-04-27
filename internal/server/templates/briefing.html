@@ -1,48 +1,88 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ .Run.Title }} · {{ .AppName }}</title>
-    <style>{{ template "styles" . }}</style>
+    <title>{{ .Run.Title }} &middot; {{ .AppName }}</title>
+    {{ template "head" . }}
   </head>
   <body>
     {{ template "topbar" . }}
     <main>
-      <a class="back" href="/action-items">Back to action items</a>
-      <h2>{{ .Run.Title }}</h2>
-      <p class="subtitle">{{ .Run.ModelName }} &middot; {{ .Run.PromptVersion }} &middot; {{ .Run.CreatedAt }}</p>
+      <a class="zora-back" href="/briefings">&larr; All briefings</a>
+      <p class="zora-eyebrow">Briefing</p>
+      <h1>{{ .Run.Title }}</h1>
+      <p class="zora-meta">{{ humaneDate .Run.PeriodStart }} &ndash; {{ humaneDate .Run.PeriodEnd }} &middot; generated {{ humaneDate .Run.CreatedAt }}</p>
 
-      <section class="section" aria-label="Action item results">
-        <div class="list">
-          {{ range .Run.Items }}
-            <div class="item">
-              <div class="row">
-                <div>
-                  <p><strong>{{ .Title }}</strong></p>
-                  <p class="meta">{{ .Category }} &middot; <span class="pill {{ .SourceStatus }}">{{ .SourceStatus }}</span>{{ if .DueAt }} &middot; due {{ .DueAt }}{{ end }}{{ if .Confidence.Valid }} &middot; confidence {{ .Confidence.Float64 }}{{ end }}</p>
-                </div>
-              </div>
-              <p>{{ .Summary }}</p>
-              {{ if .WhyItMatters }}<p class="meta">{{ .WhyItMatters }}</p>{{ end }}
-              {{ if .ActionText }}<p class="value">{{ .ActionText }}</p>{{ end }}
-              <div class="source-list">
-                {{ range .Artifacts }}
-                  <a class="item-link" href="/artifacts/{{ .ID }}">
-                    <div class="source-row">
-                      <p><strong>{{ .Title }}</strong></p>
-                      <p class="meta">{{ .Type }} &middot; {{ .ID }}</p>
-                      {{ if .Snippet }}<p class="meta">{{ .Snippet }}</p>{{ end }}
-                    </div>
-                  </a>
-                {{ end }}
+      <section class="zora-section" aria-label="Briefing items">
+        {{ if .Categories }}
+          {{ range .Categories }}
+            <div class="zora-category">
+              <h3>
+                <span>{{ .Label }}</span>
+                <span class="zora-category-count">{{ len .Items }}</span>
+              </h3>
+              <div class="zora-stack">
+                {{ range .Items }}{{ template "briefingCard" . }}{{ end }}
               </div>
             </div>
-          {{ else }}
-            <p class="empty">No source-linked action items were produced for this period.</p>
           {{ end }}
-        </div>
+        {{ else }}
+          <div class="zora-empty">
+            <h2>Nothing actionable</h2>
+            <p>No source-linked items were extracted for this period.</p>
+          </div>
+        {{ end }}
+      </section>
+
+      <section class="zora-section zora-tech" aria-label="Briefing details">
+        <details>
+          <summary>Technical details</summary>
+          <div>
+            <dl class="zora-props">
+              <dt>Run ID</dt><dd>{{ .Run.ID }}</dd>
+              <dt>Period</dt><dd>{{ .Run.PeriodStart }} &ndash; {{ .Run.PeriodEnd }}</dd>
+              <dt>Generated</dt><dd>{{ .Run.CreatedAt }}</dd>
+              {{ if .Run.ModelName }}<dt>Model</dt><dd>{{ .Run.ModelName }}</dd>{{ end }}
+              {{ if .Run.PromptVersion }}<dt>Prompt version</dt><dd>{{ .Run.PromptVersion }}</dd>{{ end }}
+            </dl>
+          </div>
+        </details>
       </section>
     </main>
+    {{ template "footer" . }}
   </body>
 </html>
+
+{{ define "briefingCard" }}
+<article class="zora-item">
+  {{ if or .DueLabel (eq .Item.SourceStatus "unverified") }}
+    <div class="zora-chips">
+      {{ if .DueLabel }}<span class="zora-chip {{ .DueClass }}">{{ .DueLabel }}</span>{{ end }}
+      {{ if eq .Item.SourceStatus "unverified" }}<span class="zora-chip zora-chip--review">Needs review</span>{{ end }}
+    </div>
+  {{ end }}
+  <p class="zora-item-title">{{ .Item.Title }}</p>
+  {{ if .Item.Summary }}<p class="zora-item-summary">{{ .Item.Summary }}</p>{{ end }}
+  {{ if .Item.WhyItMatters }}<p class="zora-item-why">{{ .Item.WhyItMatters }}</p>{{ end }}
+  {{ if .Item.ActionText }}<p class="zora-item-summary"><strong>Suggested action.</strong> {{ .Item.ActionText }}</p>{{ end }}
+  {{ if .Item.Artifacts }}
+    <div class="zora-item-source">
+      <p style="margin:0 0 6px">Sources</p>
+      <div class="zora-stack" style="gap:8px">
+        {{ range .Item.Artifacts }}
+          <a class="zora-item-link" href="/library/{{ .ID }}">
+            <article class="zora-item" style="padding:10px 12px">
+              <p style="margin:0;font-weight:600">{{ if .Title }}{{ .Title }}{{ else }}Untitled {{ humaneType .Type }}{{ end }}</p>
+              <p class="zora-meta">{{ humaneType .Type }}</p>
+              {{ if .Snippet }}<p class="zora-item-summary" style="font-size:0.88rem;margin-top:6px">&ldquo;{{ .Snippet }}&rdquo;</p>{{ end }}
+            </article>
+          </a>
+        {{ end }}
+      </div>
+    </div>
+  {{ end }}
+  <div class="zora-actions">
+    <button type="button" disabled title="Coming soon">Mark done</button>
+    <button type="button" disabled title="Coming soon">Snooze</button>
+  </div>
+</article>
+{{ end }}

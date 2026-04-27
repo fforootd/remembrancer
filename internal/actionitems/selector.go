@@ -89,6 +89,12 @@ ORDER BY a.event_at DESC, a.created_at DESC
 			raw.text = chunkText
 		}
 		raw.Score, raw.Signals = Score(raw.Title, raw.Type, raw.text)
+		if err := enrichCandidate(ctx, s.DB, &raw.Candidate); err != nil {
+			return nil, err
+		}
+		boost, signals := StructuredScore(raw.Candidate)
+		raw.Score += boost
+		raw.Signals = append(raw.Signals, signals...)
 		if raw.Score >= 0 {
 			raws = append(raws, raw)
 		}
@@ -169,6 +175,72 @@ func Score(title, artifactType, text string) (int, []string) {
 	return score, signals
 }
 
+func StructuredScore(candidate Candidate) (int, []string) {
+	score := 0
+	var signals []string
+	switch candidate.Class {
+	case "newsletter_promo":
+		score -= 6
+		signals = append(signals, "class_newsletter")
+	case "bill_statement", "school_family", "medical_health", "insurance_vehicle", "tax_finance", "travel_event":
+		score += 4
+		signals = append(signals, "class_actionable")
+	case "receipt_purchase", "identity_legal":
+		score += 2
+		signals = append(signals, "class_useful")
+	}
+	for _, fact := range candidate.Facts {
+		switch fact.Type {
+		case "due_date", "requested_action", "appointment":
+			score += 5
+			signals = append(signals, "fact_action")
+		case "amount_due":
+			score += 5
+			signals = append(signals, "fact_payment_due")
+		case "payment_status":
+			switch fact.TextValue {
+			case "payment_due":
+				score += 6
+				signals = append(signals, "payment_due")
+			case "paid":
+				score -= 6
+				signals = append(signals, "payment_paid")
+			}
+		case "is_payment_due":
+			switch fact.TextValue {
+			case "true":
+				score += 6
+				signals = append(signals, "payment_due")
+			case "false":
+				score -= 6
+				signals = append(signals, "payment_not_due")
+			}
+		case "document_type":
+			if fact.TextValue == "receipt" {
+				score -= 3
+				signals = append(signals, "document_receipt")
+			}
+		case "amount_paid":
+			score -= 2
+			signals = append(signals, "amount_paid")
+		case "policy_number", "account_number":
+			score += 3
+			signals = append(signals, "fact_structured")
+		case "document_title":
+			score += 1
+		}
+	}
+	if len(candidate.Relations) > 0 {
+		score += 2
+		signals = append(signals, "related_artifacts")
+	}
+	if len(candidate.BriefingHistory) > 0 {
+		score -= 1
+		signals = append(signals, "previously_briefed")
+	}
+	return score, signals
+}
+
 func ApplyEvidenceBudget(candidates []Candidate, budget int) []Candidate {
 	if budget < 1 {
 		budget = DefaultCharBudget
@@ -192,6 +264,143 @@ func ApplyEvidenceBudget(candidates []Candidate, budget int) []Candidate {
 		out = append(out, candidate)
 	}
 	return out
+}
+
+func enrichCandidate(ctx context.Context, db *sql.DB, candidate *Candidate) error {
+	class, err := candidateClass(ctx, db, candidate.ArtifactID)
+	if err != nil {
+		return err
+	}
+	candidate.Class = class
+	facts, err := candidateFacts(ctx, db, candidate.ArtifactID)
+	if err != nil {
+		return err
+	}
+	candidate.Facts = facts
+	relations, err := candidateRelations(ctx, db, candidate.ArtifactID)
+	if err != nil {
+		return err
+	}
+	candidate.Relations = relations
+	history, err := candidateBriefingHistory(ctx, db, candidate.ArtifactID)
+	if err != nil {
+		return err
+	}
+	candidate.BriefingHistory = history
+	return nil
+}
+
+func candidateClass(ctx context.Context, db *sql.DB, artifactID string) (string, error) {
+	var class string
+	err := db.QueryRowContext(ctx, `
+SELECT class
+FROM artifact_classification
+WHERE artifact_id = ?
+`, artifactID).Scan(&class)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("query candidate class: %w", err)
+	}
+	return class, nil
+}
+
+func candidateFacts(ctx context.Context, db *sql.DB, artifactID string) ([]CandidateFact, error) {
+	rows, err := db.QueryContext(ctx, `
+SELECT fact_type, text_value, COALESCE(quote, ''), confidence
+FROM extracted_fact
+WHERE artifact_id = ?
+ORDER BY
+	CASE fact_type
+		WHEN 'is_payment_due' THEN 0
+		WHEN 'payment_status' THEN 1
+		WHEN 'amount_due' THEN 2
+		WHEN 'due_date' THEN 3
+		WHEN 'requested_action' THEN 4
+		WHEN 'appointment' THEN 5
+		WHEN 'amount_paid' THEN 6
+		WHEN 'document_type' THEN 7
+		WHEN 'amount' THEN 8
+		ELSE 9
+	END,
+	confidence DESC
+LIMIT 16
+`, artifactID)
+	if err != nil {
+		return nil, fmt.Errorf("query candidate facts: %w", err)
+	}
+	defer rows.Close()
+	var facts []CandidateFact
+	for rows.Next() {
+		var fact CandidateFact
+		if err := rows.Scan(&fact.Type, &fact.TextValue, &fact.Quote, &fact.Confidence); err != nil {
+			return nil, fmt.Errorf("scan candidate fact: %w", err)
+		}
+		facts = append(facts, fact)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate candidate facts: %w", err)
+	}
+	return facts, nil
+}
+
+func candidateRelations(ctx context.Context, db *sql.DB, artifactID string) ([]CandidateRelation, error) {
+	rows, err := db.QueryContext(ctx, `
+SELECT r.relation_type,
+	CASE WHEN r.source_artifact_id = ? THEN r.target_artifact_id ELSE r.source_artifact_id END AS other_artifact,
+	r.reason,
+	r.confidence
+FROM artifact_relation r
+WHERE (r.source_artifact_id = ? OR r.target_artifact_id = ?)
+	AND r.status = 'proposed'
+ORDER BY r.updated_at DESC
+LIMIT 8
+`, artifactID, artifactID, artifactID)
+	if err != nil {
+		return nil, fmt.Errorf("query candidate relations: %w", err)
+	}
+	defer rows.Close()
+	var relations []CandidateRelation
+	for rows.Next() {
+		var relation CandidateRelation
+		if err := rows.Scan(&relation.Type, &relation.OtherArtifact, &relation.Reason, &relation.Confidence); err != nil {
+			return nil, fmt.Errorf("scan candidate relation: %w", err)
+		}
+		relations = append(relations, relation)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate candidate relations: %w", err)
+	}
+	return relations, nil
+}
+
+func candidateBriefingHistory(ctx context.Context, db *sql.DB, artifactID string) ([]CandidateBriefing, error) {
+	rows, err := db.QueryContext(ctx, `
+SELECT b.title, i.title, b.created_at
+FROM briefing_item_artifact bia
+JOIN briefing_item i ON i.id = bia.briefing_item_id
+JOIN briefing b ON b.id = i.briefing_id
+WHERE bia.artifact_id = ?
+ORDER BY b.created_at DESC
+LIMIT 5
+`, artifactID)
+	if err != nil {
+		return nil, fmt.Errorf("query candidate briefing history: %w", err)
+	}
+	defer rows.Close()
+	var history []CandidateBriefing
+	for rows.Next() {
+		var item CandidateBriefing
+		if err := rows.Scan(&item.Title, &item.ItemTitle, &item.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan candidate briefing history: %w", err)
+		}
+		history = append(history, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate candidate briefing history: %w", err)
+	}
+	return history, nil
 }
 
 func artifactChunkText(ctx context.Context, db *sql.DB, artifactID string) (string, error) {

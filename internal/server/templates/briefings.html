@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <title>Briefings &middot; {{ .AppName }}</title>
+    {{ template "head" . }}
+  </head>
+  <body>
+    {{ template "topbar" . }}
+    <main>
+      <p class="zora-eyebrow">Briefings</p>
+      <h1>What arrived recently</h1>
+      <p class="zora-meta">A briefing groups what came in over a date range and surfaces what needs your attention. Generate one whenever you want a fresh read.</p>
+
+      {{ if .ErrorMessage }}
+        <div class="zora-alert zora-alert--error">
+          <p><strong>Generation failed.</strong> {{ .ErrorMessage }}</p>
+        </div>
+      {{ end }}
+
+      <section class="zora-section" aria-label="Generate a briefing">
+        <article class="zora-item">
+          <p class="zora-eyebrow">Generate a briefing</p>
+          <p class="zora-meta">Reasoning is {{ if .LLMEnabled }}<span class="zora-status-ok">on</span>{{ else }}<span class="zora-status-warn">off</span> &middot; previewing candidates only{{ end }}{{ if .LLMModel }} &middot; {{ .LLMModel }}{{ end }}</p>
+          <form class="zora-inline-form" method="post" action="/action-items" style="margin-top:12px">
+            <label>
+              <span>Start</span>
+              <input type="date" name="period_start" value="{{ .PeriodStartDate }}" required>
+            </label>
+            <label>
+              <span>End</span>
+              <input type="date" name="period_end" value="{{ .PeriodEndDate }}" required>
+            </label>
+            <button type="submit">{{ if .LLMEnabled }}Generate briefing{{ else }}Preview candidates{{ end }}</button>
+          </form>
+        </article>
+      </section>
+
+      <section class="zora-section" aria-label="Past briefings">
+        <h2>Past briefings</h2>
+        <div class="zora-stack">
+          {{ range .RecentRuns }}
+            <a class="zora-item-link" href="/briefings/{{ .ID }}">
+              <article class="zora-item">
+                <p class="zora-item-title">{{ .Title }}</p>
+                <p class="zora-meta">{{ .ItemCount }} item{{ if ne .ItemCount 1 }}s{{ end }} &middot; {{ humaneDate .CreatedAt }}</p>
+              </article>
+            </a>
+          {{ else }}
+            <div class="zora-empty">
+              <h2>No briefings yet</h2>
+              <p>Generate your first one above.</p>
+            </div>
+          {{ end }}
+        </div>
+      </section>
+    </main>
+    {{ template "footer" . }}
+  </body>
+</html>

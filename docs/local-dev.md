@@ -126,8 +126,10 @@ ZORA_LLM_MODEL=gemma4:e4b make dev
 ```
 
 For a lighter Qwen comparison, override the model with `qwen3.5:4b-q4_K_M`.
-For a slower Qwen quality-mode pass, use `qwen3.5:9b-q4_K_M`. Update
-`llm.model` in the active config to match whichever model you run.
+For a slower but stronger quality-mode ingest pass on a 16GB+ Mac, use
+`qwen3.5:9b-q4_K_M`. Update `llm.model` in the active config to match whichever
+model you run. Future backlog ingest should use the fast dev model for the first
+pass, then optionally reprocess ambiguous artifacts with the larger Qwen model.
 
 ## Doctor
 

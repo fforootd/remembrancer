@@ -265,6 +265,236 @@ CREATE TABLE briefing_item_artifact (
 );
 `,
 	},
+	{
+		Version: 5,
+		Name:    "assistant pipeline derived state",
+		SQL: `
+CREATE TABLE pipeline_stage (
+	artifact_id TEXT NOT NULL,
+	stage TEXT NOT NULL CHECK (stage IN (
+		'extract_artifact',
+		'classify_artifact',
+		'extract_fields',
+		'reconcile_artifact',
+		'generate_briefing'
+	)),
+	status TEXT NOT NULL CHECK (status IN ('queued', 'running', 'succeeded', 'failed', 'skipped')),
+	input_hash TEXT,
+	attempts INTEGER NOT NULL DEFAULT 0,
+	last_error TEXT,
+	created_at TEXT NOT NULL,
+	updated_at TEXT NOT NULL,
+	finished_at TEXT,
+	PRIMARY KEY (artifact_id, stage),
+	FOREIGN KEY (artifact_id) REFERENCES artifact(id) ON DELETE CASCADE
+);
+
+CREATE INDEX pipeline_stage_status_idx
+ON pipeline_stage(stage, status, updated_at);
+
+CREATE TABLE evidence (
+	id TEXT PRIMARY KEY,
+	artifact_id TEXT NOT NULL,
+	chunk_id TEXT,
+	kind TEXT NOT NULL CHECK (kind IN ('chunk', 'extracted_text')),
+	quote TEXT NOT NULL,
+	char_start INTEGER NOT NULL DEFAULT 0,
+	char_end INTEGER NOT NULL DEFAULT 0,
+	page_start INTEGER,
+	page_end INTEGER,
+	extractor TEXT,
+	provenance_json TEXT NOT NULL DEFAULT '{}',
+	created_at TEXT NOT NULL,
+	FOREIGN KEY (artifact_id) REFERENCES artifact(id) ON DELETE CASCADE,
+	FOREIGN KEY (chunk_id) REFERENCES artifact_chunk(id) ON DELETE CASCADE
+);
+
+CREATE INDEX evidence_artifact_idx
+ON evidence(artifact_id, chunk_id);
+
+CREATE TABLE artifact_classification (
+	artifact_id TEXT PRIMARY KEY,
+	class TEXT NOT NULL CHECK (class IN (
+		'bill_statement',
+		'receipt_purchase',
+		'school_family',
+		'medical_health',
+		'insurance_vehicle',
+		'tax_finance',
+		'travel_event',
+		'identity_legal',
+		'correspondence',
+		'newsletter_promo',
+		'photo_memory',
+		'generic_document'
+	)),
+	evidence_id TEXT,
+	confidence REAL NOT NULL CHECK (confidence >= 0 AND confidence <= 1),
+	source_type TEXT NOT NULL CHECK (source_type IN ('rule', 'llm')),
+	model_name TEXT,
+	prompt_version TEXT,
+	input_hash TEXT NOT NULL,
+	created_at TEXT NOT NULL,
+	updated_at TEXT NOT NULL,
+	FOREIGN KEY (artifact_id) REFERENCES artifact(id) ON DELETE CASCADE,
+	FOREIGN KEY (evidence_id) REFERENCES evidence(id) ON DELETE SET NULL
+);
+
+CREATE INDEX artifact_classification_class_idx
+ON artifact_classification(class, updated_at);
+
+CREATE TABLE extracted_fact (
+	id TEXT PRIMARY KEY,
+	artifact_id TEXT NOT NULL,
+	fact_type TEXT NOT NULL CHECK (fact_type IN (
+		'date',
+		'due_date',
+		'amount',
+		'vendor',
+		'person',
+		'organization',
+		'policy_number',
+		'account_number',
+		'document_title',
+		'requested_action',
+		'appointment'
+	)),
+	value_json TEXT NOT NULL,
+	text_value TEXT NOT NULL,
+	evidence_id TEXT,
+	quote TEXT,
+	confidence REAL NOT NULL CHECK (confidence >= 0 AND confidence <= 1),
+	source_type TEXT NOT NULL CHECK (source_type IN ('rule', 'llm')),
+	model_name TEXT,
+	prompt_version TEXT,
+	input_hash TEXT NOT NULL,
+	created_at TEXT NOT NULL,
+	updated_at TEXT NOT NULL,
+	FOREIGN KEY (artifact_id) REFERENCES artifact(id) ON DELETE CASCADE,
+	FOREIGN KEY (evidence_id) REFERENCES evidence(id) ON DELETE SET NULL
+);
+
+CREATE INDEX extracted_fact_artifact_idx
+ON extracted_fact(artifact_id, fact_type);
+
+CREATE INDEX extracted_fact_lookup_idx
+ON extracted_fact(fact_type, text_value);
+
+CREATE TABLE proposal (
+	id TEXT PRIMARY KEY,
+	type TEXT NOT NULL CHECK (type IN ('artifact_relation', 'classification', 'fact', 'memory', 'reminder', 'task', 'summary', 'insight')),
+	status TEXT NOT NULL CHECK (status IN ('proposed', 'accepted', 'rejected', 'edited', 'superseded')),
+	source_artifact_id TEXT,
+	title TEXT NOT NULL,
+	summary TEXT,
+	model_name TEXT,
+	prompt_version TEXT,
+	input_hash TEXT,
+	confidence REAL CHECK (confidence IS NULL OR (confidence >= 0 AND confidence <= 1)),
+	created_at TEXT NOT NULL,
+	updated_at TEXT NOT NULL,
+	FOREIGN KEY (source_artifact_id) REFERENCES artifact(id) ON DELETE CASCADE
+);
+
+CREATE INDEX proposal_type_status_idx
+ON proposal(type, status, updated_at);
+
+CREATE TABLE artifact_relation (
+	id TEXT PRIMARY KEY,
+	proposal_id TEXT,
+	source_artifact_id TEXT NOT NULL,
+	target_artifact_id TEXT NOT NULL,
+	relation_type TEXT NOT NULL CHECK (relation_type IN (
+		'duplicate_of',
+		'supersedes',
+		'updates_fact',
+		'same_obligation_as',
+		'supports',
+		'contradicts',
+		'related_to'
+	)),
+	source_evidence_id TEXT,
+	target_evidence_id TEXT,
+	reason TEXT NOT NULL,
+	confidence REAL NOT NULL CHECK (confidence >= 0 AND confidence <= 1),
+	status TEXT NOT NULL CHECK (status IN ('proposed', 'accepted', 'rejected', 'superseded')),
+	created_at TEXT NOT NULL,
+	updated_at TEXT NOT NULL,
+	CHECK (source_artifact_id <> target_artifact_id),
+	FOREIGN KEY (proposal_id) REFERENCES proposal(id) ON DELETE CASCADE,
+	FOREIGN KEY (source_artifact_id) REFERENCES artifact(id) ON DELETE CASCADE,
+	FOREIGN KEY (target_artifact_id) REFERENCES artifact(id) ON DELETE CASCADE,
+	FOREIGN KEY (source_evidence_id) REFERENCES evidence(id) ON DELETE SET NULL,
+	FOREIGN KEY (target_evidence_id) REFERENCES evidence(id) ON DELETE SET NULL
+);
+
+CREATE INDEX artifact_relation_source_idx
+ON artifact_relation(source_artifact_id, relation_type, status);
+
+CREATE INDEX artifact_relation_target_idx
+ON artifact_relation(target_artifact_id, relation_type, status);
+`,
+	},
+	{
+		Version: 6,
+		Name:    "payment obligation fact types",
+		SQL: `
+CREATE TABLE extracted_fact_new (
+	id TEXT PRIMARY KEY,
+	artifact_id TEXT NOT NULL,
+	fact_type TEXT NOT NULL CHECK (fact_type IN (
+		'date',
+		'due_date',
+		'amount',
+		'document_type',
+		'payment_status',
+		'is_payment_due',
+		'amount_paid',
+		'amount_due',
+		'decision_reason',
+		'vendor',
+		'person',
+		'organization',
+		'policy_number',
+		'account_number',
+		'document_title',
+		'requested_action',
+		'appointment'
+	)),
+	value_json TEXT NOT NULL,
+	text_value TEXT NOT NULL,
+	evidence_id TEXT,
+	quote TEXT,
+	confidence REAL NOT NULL CHECK (confidence >= 0 AND confidence <= 1),
+	source_type TEXT NOT NULL CHECK (source_type IN ('rule', 'llm')),
+	model_name TEXT,
+	prompt_version TEXT,
+	input_hash TEXT NOT NULL,
+	created_at TEXT NOT NULL,
+	updated_at TEXT NOT NULL,
+	FOREIGN KEY (artifact_id) REFERENCES artifact(id) ON DELETE CASCADE,
+	FOREIGN KEY (evidence_id) REFERENCES evidence(id) ON DELETE SET NULL
+);
+
+INSERT INTO extracted_fact_new (
+	id, artifact_id, fact_type, value_json, text_value, evidence_id, quote,
+	confidence, source_type, model_name, prompt_version, input_hash, created_at, updated_at
+)
+SELECT
+	id, artifact_id, fact_type, value_json, text_value, evidence_id, quote,
+	confidence, source_type, model_name, prompt_version, input_hash, created_at, updated_at
+FROM extracted_fact;
+
+DROP TABLE extracted_fact;
+ALTER TABLE extracted_fact_new RENAME TO extracted_fact;
+
+CREATE INDEX extracted_fact_artifact_idx
+ON extracted_fact(artifact_id, fact_type);
+
+CREATE INDEX extracted_fact_lookup_idx
+ON extracted_fact(fact_type, text_value);
+`,
+	},
 }
 
 func Migrate(ctx context.Context, database *sql.DB) error {

@@ -35,6 +35,11 @@ type HealthStatus struct {
 	Detail     string
 }
 
+type doclingOCROptions struct {
+	DoOCR    bool
+	ForceOCR bool
+}
+
 func (e DoclingExtractor) Extract(ctx context.Context, path string, artifactType string) (Result, error) {
 	if artifactType == TypeText {
 		return extractTextFile(path)
@@ -51,7 +56,25 @@ func (e DoclingExtractor) Extract(ctx context.Context, path string, artifactType
 		defer cancel()
 	}
 
-	requestBody, contentType, err := e.multipartBody(path, artifactType)
+	options := e.ocrOptions(artifactType)
+	result, err := e.extractOnce(ctx, path, artifactType, options)
+	if err != nil {
+		return Result{}, err
+	}
+	if shouldRetryWithForcedOCR(artifactType, options, result) {
+		retryOptions := doclingOCROptions{DoOCR: true, ForceOCR: true}
+		retry, retryErr := e.extractOnce(ctx, path, artifactType, retryOptions)
+		if retryErr == nil {
+			retry.Warnings = append([]string{"retried with forced OCR after low-text PDF extraction"}, retry.Warnings...)
+			return retry, nil
+		}
+		result.Warnings = append(result.Warnings, "forced OCR retry failed: "+retryErr.Error())
+	}
+	return result, nil
+}
+
+func (e DoclingExtractor) extractOnce(ctx context.Context, path string, artifactType string, options doclingOCROptions) (Result, error) {
+	requestBody, contentType, err := e.multipartBody(path, artifactType, options)
 	if err != nil {
 		return Result{}, err
 	}
@@ -122,7 +145,7 @@ func (e DoclingExtractor) Extract(ctx context.Context, path string, artifactType
 	}, nil
 }
 
-func (e DoclingExtractor) multipartBody(path string, artifactType string) (io.Reader, string, error) {
+func (e DoclingExtractor) multipartBody(path string, artifactType string, options doclingOCROptions) (io.Reader, string, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, "", fmt.Errorf("open file for docling: %w", err)
@@ -134,8 +157,8 @@ func (e DoclingExtractor) multipartBody(path string, artifactType string) (io.Re
 	fields := map[string][]string{
 		"from_formats":     {doclingFormat(artifactType)},
 		"to_formats":       e.outputFormats(),
-		"do_ocr":           {strconv.FormatBool(e.DoOCR)},
-		"force_ocr":        {strconv.FormatBool(e.ForceOCR)},
+		"do_ocr":           {strconv.FormatBool(options.DoOCR)},
+		"force_ocr":        {strconv.FormatBool(options.ForceOCR)},
 		"abort_on_error":   {"false"},
 		"document_timeout": {formatSeconds(e.Timeout)},
 	}
@@ -174,6 +197,28 @@ func (e DoclingExtractor) multipartBody(path string, artifactType string) (io.Re
 		return nil, "", fmt.Errorf("close docling multipart body: %w", err)
 	}
 	return bytes.NewReader(body.Bytes()), writer.FormDataContentType(), nil
+}
+
+func (e DoclingExtractor) ocrOptions(artifactType string) doclingOCROptions {
+	options := doclingOCROptions{
+		DoOCR:    e.DoOCR,
+		ForceOCR: e.ForceOCR,
+	}
+	if artifactType == TypeImage {
+		options.DoOCR = true
+	}
+	return options
+}
+
+func shouldRetryWithForcedOCR(artifactType string, options doclingOCROptions, result Result) bool {
+	if artifactType != TypePDF || options.ForceOCR {
+		return false
+	}
+	text := strings.TrimSpace(result.Text)
+	if text == "" {
+		text = strings.TrimSpace(result.Markdown)
+	}
+	return len([]rune(text)) < 40
 }
 
 func (e DoclingExtractor) outputFormats() []string {

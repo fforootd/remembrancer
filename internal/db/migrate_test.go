@@ -83,6 +83,12 @@ func TestMigrateCreatesIngestSchemaAndFTS(t *testing.T) {
 		"briefing",
 		"briefing_item",
 		"briefing_item_artifact",
+		"pipeline_stage",
+		"evidence",
+		"artifact_classification",
+		"extracted_fact",
+		"proposal",
+		"artifact_relation",
 	} {
 		var name string
 		if err := database.QueryRow(`
@@ -131,6 +137,44 @@ WHERE artifact_chunk_fts MATCH 'chunk'
 	}
 	if chunkID != "chk_1" {
 		t.Fatalf("chunkID = %q", chunkID)
+	}
+}
+
+func TestMigrateCreatesAssistantPipelineSchema(t *testing.T) {
+	database := openTempDB(t)
+	defer database.Close()
+
+	if err := Migrate(context.Background(), database); err != nil {
+		t.Fatalf("Migrate: %v", err)
+	}
+
+	if _, err := database.Exec(`
+INSERT INTO blob (hash, algorithm, size_bytes, storage_path, created_at)
+VALUES ('hash_pipeline', 'sha256', 3, '/tmp/hash_pipeline', '2026-01-01T00:00:00Z');
+INSERT INTO artifact (id, type, source, source_id, title, owner, content_hash, captured_at, event_at, created_at)
+VALUES ('art_pipeline', 'text', 'watch_folder', 'source_pipeline', 'School form', 'florian', 'hash_pipeline', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+INSERT INTO pipeline_stage (artifact_id, stage, status, input_hash, created_at, updated_at)
+VALUES ('art_pipeline', 'classify_artifact', 'succeeded', 'abc', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+INSERT INTO evidence (id, artifact_id, kind, quote, char_start, char_end, provenance_json, created_at)
+VALUES ('ev_pipeline', 'art_pipeline', 'extracted_text', 'Please return the school form.', 0, 30, '{}', '2026-01-01T00:00:00Z');
+INSERT INTO artifact_classification (artifact_id, class, evidence_id, confidence, source_type, input_hash, created_at, updated_at)
+VALUES ('art_pipeline', 'school_family', 'ev_pipeline', 0.9, 'rule', 'abc', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+INSERT INTO extracted_fact (id, artifact_id, fact_type, value_json, text_value, evidence_id, quote, confidence, source_type, input_hash, created_at, updated_at)
+VALUES ('fact_pipeline', 'art_pipeline', 'requested_action', '{"text":"return the school form"}', 'return the school form', 'ev_pipeline', 'Please return the school form.', 0.8, 'rule', 'abc', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+INSERT INTO extracted_fact (id, artifact_id, fact_type, value_json, text_value, evidence_id, quote, confidence, source_type, input_hash, created_at, updated_at)
+VALUES ('fact_payment_pipeline', 'art_pipeline', 'payment_status', '{"payment_status":"payment_due"}', 'payment_due', 'ev_pipeline', 'Amount Due', 0.8, 'rule', 'abc', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+INSERT INTO proposal (id, type, status, source_artifact_id, title, confidence, created_at, updated_at)
+VALUES ('prop_pipeline', 'artifact_relation', 'proposed', 'art_pipeline', 'related', 0.7, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+`); err != nil {
+		t.Fatalf("insert pipeline fixture: %v", err)
+	}
+
+	var class string
+	if err := database.QueryRow(`SELECT class FROM artifact_classification WHERE artifact_id = 'art_pipeline'`).Scan(&class); err != nil {
+		t.Fatalf("read classification: %v", err)
+	}
+	if class != "school_family" {
+		t.Fatalf("class = %q", class)
 	}
 }
 

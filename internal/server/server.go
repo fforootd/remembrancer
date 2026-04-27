@@ -21,6 +21,7 @@ import (
 	"zora/internal/extract"
 	"zora/internal/ingest"
 	"zora/internal/jobs"
+	"zora/internal/pipeline"
 )
 
 //go:embed templates/*.html
@@ -46,10 +47,21 @@ func WithActionItemReasoner(reasoner actionitems.Reasoner) Option {
 
 func New(cfg config.Config, database *sql.DB, logger *slog.Logger, ingestService *ingest.Service, options ...Option) (*Server, error) {
 	templates, err := template.New("zora").Funcs(template.FuncMap{
-		"humanBytes":     humanBytes,
-		"prettyJSON":     prettyJSON,
-		"renderMarkdown": renderMarkdown,
-	}).ParseFS(templateFS, "templates/*.html")
+		"humanBytes":         humanBytes,
+		"prettyJSON":         prettyJSON,
+		"renderMarkdown":     renderMarkdown,
+		"humaneCategory":     humaneCategory,
+		"humaneCategoryRank": humaneCategoryRank,
+		"humaneType":         humaneType,
+		"humaneTypePlural":   humaneTypePlural,
+		"humaneSource":       humaneSource,
+		"humaneDate":         humaneDate,
+		"humaneRelativeDue":  humaneRelativeDue,
+		"dueChipClass":       dueChipClass,
+	}).Parse(`{{ define "styles" }}{{ end }}`)
+	if err == nil {
+		templates, err = templates.ParseFS(templateFS, "templates/*.html")
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -89,16 +101,45 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) routes() {
 	s.mux.HandleFunc("GET /healthz", s.healthz)
-	s.mux.HandleFunc("GET /", s.index)
+	s.mux.Handle("GET /static/", staticHandler())
+
+	s.mux.HandleFunc("GET /", s.today)
+	s.mux.HandleFunc("GET /admin", s.admin)
 	s.mux.HandleFunc("POST /ingest/scan", s.scanIngest)
-	s.mux.HandleFunc("GET /action-items", s.actionItems)
-	s.mux.HandleFunc("POST /action-items", s.generateActionItems)
+
+	s.mux.HandleFunc("GET /briefings", s.briefingsList)
 	s.mux.HandleFunc("GET /briefings/{id}", s.briefing)
+	s.mux.HandleFunc("GET /action-items", s.actionItemsRedirect)
+	s.mux.HandleFunc("POST /action-items", s.generateActionItems)
+
 	s.mux.HandleFunc("GET /search", s.search)
+
+	s.mux.HandleFunc("GET /library", s.artifactList)
+	s.mux.HandleFunc("GET /library/{id}", s.artifact)
+	s.mux.HandleFunc("GET /library/{id}/raw", s.artifactRaw)
 	s.mux.HandleFunc("GET /artifacts", s.artifactList)
 	s.mux.HandleFunc("GET /artifacts/{id}", s.artifact)
 	s.mux.HandleFunc("GET /artifacts/{id}/raw", s.artifactRaw)
+
 	s.mux.HandleFunc("GET /jobs/{id}", s.jobDetail)
+}
+
+func (s *Server) actionItemsRedirect(w http.ResponseWriter, r *http.Request) {
+	http.Redirect(w, r, "/briefings", http.StatusMovedPermanently)
+}
+
+func (s *Server) today(w http.ResponseWriter, r *http.Request) {
+	s.renderToday(w, r)
+}
+
+func (s *Server) admin(w http.ResponseWriter, r *http.Request) {
+	s.index(w, r)
+}
+
+func (s *Server) briefingsList(w http.ResponseWriter, r *http.Request) {
+	start, end := defaultActionItemPeriod(time.Now().UTC())
+	data := s.newActionItemsData(r.Context(), r.URL.Path, start, end)
+	s.render(w, "briefings.html", data)
 }
 
 func (s *Server) healthz(w http.ResponseWriter, r *http.Request) {
@@ -200,8 +241,8 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := s.templates.ExecuteTemplate(w, "index.html", data); err != nil {
-		s.logger.Error("render index", "error", err)
+	if err := s.templates.ExecuteTemplate(w, "admin.html", data); err != nil {
+		s.logger.Error("render admin", "error", err)
 	}
 }
 
@@ -251,12 +292,6 @@ func (s *Server) scanIngest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, "/", http.StatusSeeOther)
-}
-
-func (s *Server) actionItems(w http.ResponseWriter, r *http.Request) {
-	start, end := defaultActionItemPeriod(time.Now().UTC())
-	data := s.newActionItemsData(r.Context(), r.URL.Path, start, end)
-	s.render(w, "action_items.html", data)
 }
 
 func (s *Server) generateActionItems(w http.ResponseWriter, r *http.Request) {
@@ -328,7 +363,17 @@ func (s *Server) generateActionItems(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "persist action items", http.StatusInternalServerError)
 		return
 	}
+	s.markGenerateBriefingStage(r.Context(), run.ID, candidates)
 	http.Redirect(w, r, "/briefings/"+run.ID, http.StatusSeeOther)
+}
+
+func (s *Server) markGenerateBriefingStage(ctx context.Context, runID string, candidates []actionitems.Candidate) {
+	now := time.Now().UTC()
+	for _, candidate := range candidates {
+		if err := pipeline.MarkStageSucceeded(ctx, s.database, candidate.ArtifactID, pipeline.StageGenerateBriefing, runID, now); err != nil {
+			s.logger.Warn("mark generate briefing stage", "artifact_id", candidate.ArtifactID, "error", err)
+		}
+	}
 }
 
 func (s *Server) newActionItemsData(ctx context.Context, path string, start, end time.Time) actionItemsData {
@@ -363,9 +408,10 @@ func (s *Server) briefing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.render(w, "briefing.html", briefingData{
-		AppName: "Zora",
-		Nav:     navFor(r.URL.Path),
-		Run:     run,
+		AppName:    "Zora",
+		Nav:        navFor(r.URL.Path),
+		Run:        run,
+		Categories: groupRunItemsByCategory(run.Items),
 	})
 }
 
@@ -493,7 +539,31 @@ func (s *Server) artifactList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data.Items = items
+	if typeFilter == "" || typeFilter == "all" {
+		data.Groups = groupArtifactsByType(items)
+	}
 	s.render(w, "artifacts.html", data)
+}
+
+func groupArtifactsByType(items []artifacts.Artifact) []libraryGroup {
+	order := []string{"pdf", "image", "text", "email"}
+	buckets := map[string][]artifacts.Artifact{}
+	seen := map[string]bool{}
+	for _, item := range items {
+		buckets[item.Type] = append(buckets[item.Type], item)
+		seen[item.Type] = true
+	}
+	out := make([]libraryGroup, 0, len(seen))
+	for _, t := range order {
+		if list, ok := buckets[t]; ok {
+			out = append(out, libraryGroup{Type: t, Label: humaneTypePlural(t), Items: list})
+			delete(buckets, t)
+		}
+	}
+	for t, list := range buckets {
+		out = append(out, libraryGroup{Type: t, Label: humaneTypePlural(t), Items: list})
+	}
+	return out
 }
 
 func (s *Server) artifactRaw(w http.ResponseWriter, r *http.Request) {
@@ -748,19 +818,21 @@ func errorString(err error) string {
 
 type navState struct {
 	Home      bool
+	Today     bool
 	Search    bool
 	Artifacts bool
+	Library   bool
 	Briefings bool
 }
 
 func navFor(path string) navState {
 	switch {
 	case path == "/":
-		return navState{Home: true}
+		return navState{Home: true, Today: true}
 	case path == "/search" || strings.HasPrefix(path, "/search/"):
 		return navState{Search: true}
-	case path == "/artifacts" || strings.HasPrefix(path, "/artifacts/"):
-		return navState{Artifacts: true}
+	case path == "/artifacts" || strings.HasPrefix(path, "/artifacts/") || path == "/library" || strings.HasPrefix(path, "/library/"):
+		return navState{Artifacts: true, Library: true}
 	case path == "/action-items" || strings.HasPrefix(path, "/briefings/"):
 		return navState{Briefings: true}
 	default:
@@ -859,9 +931,10 @@ type actionItemsData struct {
 }
 
 type briefingData struct {
-	AppName string
-	Nav     navState
-	Run     actionitems.Run
+	AppName    string
+	Nav        navState
+	Run        actionitems.Run
+	Categories []todayCategory
 }
 
 type artifactData struct {
@@ -897,7 +970,14 @@ type artifactListData struct {
 	Since        string
 	Limit        int
 	Items        []artifacts.Artifact
+	Groups       []libraryGroup
 	ErrorMessage string
+}
+
+type libraryGroup struct {
+	Type  string
+	Label string
+	Items []artifacts.Artifact
 }
 
 type jobData struct {

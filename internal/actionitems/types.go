@@ -3,10 +3,12 @@ package actionitems
 import (
 	"context"
 	"time"
+
+	"zora/internal/llm/prompts"
 )
 
 const (
-	PromptVersion      = "action-items-v1"
+	PromptVersion      = prompts.ActionItemsID
 	DefaultLimit       = 40
 	DefaultCharBudget  = 32_000
 	CandidateCharLimit = 4_000
@@ -16,14 +18,38 @@ const (
 )
 
 type Candidate struct {
-	ArtifactID string   `json:"artifact_id"`
-	Title      string   `json:"title"`
-	Type       string   `json:"type"`
-	EventAt    string   `json:"event_at"`
-	CreatedAt  string   `json:"created_at"`
-	Score      int      `json:"score"`
-	Signals    []string `json:"signals"`
-	Evidence   string   `json:"evidence"`
+	ArtifactID      string              `json:"artifact_id"`
+	Title           string              `json:"title"`
+	Type            string              `json:"type"`
+	Class           string              `json:"class,omitempty"`
+	EventAt         string              `json:"event_at"`
+	CreatedAt       string              `json:"created_at"`
+	Score           int                 `json:"score"`
+	Signals         []string            `json:"signals"`
+	Facts           []CandidateFact     `json:"facts,omitempty"`
+	Relations       []CandidateRelation `json:"relations,omitempty"`
+	BriefingHistory []CandidateBriefing `json:"briefing_history,omitempty"`
+	Evidence        string              `json:"evidence"`
+}
+
+type CandidateFact struct {
+	Type       string  `json:"type"`
+	TextValue  string  `json:"text_value"`
+	Quote      string  `json:"quote,omitempty"`
+	Confidence float64 `json:"confidence"`
+}
+
+type CandidateRelation struct {
+	Type          string  `json:"type"`
+	OtherArtifact string  `json:"other_artifact"`
+	Reason        string  `json:"reason"`
+	Confidence    float64 `json:"confidence"`
+}
+
+type CandidateBriefing struct {
+	Title     string `json:"title"`
+	ItemTitle string `json:"item_title"`
+	CreatedAt string `json:"created_at"`
 }
 
 type Request struct {

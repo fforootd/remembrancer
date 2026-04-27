@@ -1,4 +1,4 @@
-package actionitems
+package pipeline
 
 import (
 	"bytes"
@@ -13,7 +13,7 @@ import (
 	"zora/internal/llm/prompts"
 )
 
-type OllamaClient struct {
+type OllamaFieldClient struct {
 	BaseURL         string
 	Model           string
 	Timeout         time.Duration
@@ -48,12 +48,12 @@ type ollamaChatResponse struct {
 	Error   string        `json:"error"`
 }
 
-func (c OllamaClient) ExtractActionItems(ctx context.Context, req Request) (GeneratedResponse, error) {
+func (c OllamaFieldClient) ExtractFacts(ctx context.Context, req FieldRequest) (GeneratedFactResponse, error) {
 	if c.BaseURL == "" {
-		return GeneratedResponse{}, fmt.Errorf("ollama base URL is required")
+		return GeneratedFactResponse{}, fmt.Errorf("ollama base URL is required")
 	}
 	if c.Model == "" {
-		return GeneratedResponse{}, fmt.Errorf("ollama model is required")
+		return GeneratedFactResponse{}, fmt.Errorf("ollama model is required")
 	}
 	if c.Timeout > 0 {
 		var cancel context.CancelFunc
@@ -63,16 +63,15 @@ func (c OllamaClient) ExtractActionItems(ctx context.Context, req Request) (Gene
 
 	chatRequest, err := c.chatRequest(req)
 	if err != nil {
-		return GeneratedResponse{}, err
+		return GeneratedFactResponse{}, err
 	}
 	body, err := json.Marshal(chatRequest)
 	if err != nil {
-		return GeneratedResponse{}, fmt.Errorf("encode ollama request: %w", err)
+		return GeneratedFactResponse{}, fmt.Errorf("encode field extraction request: %w", err)
 	}
-
 	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(c.BaseURL, "/")+"/api/chat", bytes.NewReader(body))
 	if err != nil {
-		return GeneratedResponse{}, fmt.Errorf("create ollama request: %w", err)
+		return GeneratedFactResponse{}, fmt.Errorf("create ollama field request: %w", err)
 	}
 	httpRequest.Header.Set("Content-Type", "application/json")
 
@@ -82,47 +81,48 @@ func (c OllamaClient) ExtractActionItems(ctx context.Context, req Request) (Gene
 	}
 	resp, err := client.Do(httpRequest)
 	if err != nil {
-		return GeneratedResponse{}, fmt.Errorf("call ollama: %w", err)
+		return GeneratedFactResponse{}, fmt.Errorf("call ollama for fields: %w", err)
 	}
 	defer resp.Body.Close()
-
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		data, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return GeneratedResponse{}, fmt.Errorf("ollama returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(data)))
+		return GeneratedFactResponse{}, fmt.Errorf("ollama returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(data)))
 	}
 
 	var chatResponse ollamaChatResponse
 	if err := json.NewDecoder(resp.Body).Decode(&chatResponse); err != nil {
-		return GeneratedResponse{}, fmt.Errorf("decode ollama response: %w", err)
+		return GeneratedFactResponse{}, fmt.Errorf("decode ollama field response: %w", err)
 	}
 	if chatResponse.Error != "" {
-		return GeneratedResponse{}, fmt.Errorf("ollama error: %s", chatResponse.Error)
+		return GeneratedFactResponse{}, fmt.Errorf("ollama error: %s", chatResponse.Error)
 	}
 	if strings.TrimSpace(chatResponse.Message.Content) == "" {
-		return GeneratedResponse{}, fmt.Errorf("ollama returned empty content")
+		return GeneratedFactResponse{}, fmt.Errorf("ollama returned empty field content")
 	}
 
-	var generated GeneratedResponse
+	var generated GeneratedFactResponse
 	if err := json.Unmarshal([]byte(chatResponse.Message.Content), &generated); err != nil {
-		return GeneratedResponse{}, fmt.Errorf("decode action item JSON: %w", err)
+		return GeneratedFactResponse{}, fmt.Errorf("decode field JSON: %w", err)
 	}
 	return generated, nil
 }
 
-func (c OllamaClient) chatRequest(req Request) (ollamaChatRequest, error) {
-	spec := prompts.ActionItems()
+func (c OllamaFieldClient) chatRequest(req FieldRequest) (ollamaChatRequest, error) {
+	spec := prompts.ArtifactFields()
 	if req.PromptVersion == "" {
 		req.PromptVersion = spec.ID
 	}
-	candidateJSON, err := json.MarshalIndent(req.Candidates, "", "  ")
+	evidenceJSON, err := json.MarshalIndent(fieldEvidence(req.Evidence), "", "  ")
 	if err != nil {
-		return ollamaChatRequest{}, fmt.Errorf("encode action item candidates: %w", err)
+		return ollamaChatRequest{}, fmt.Errorf("encode field evidence: %w", err)
 	}
 	userContent, err := spec.RenderUser(map[string]string{
-		"PromptID":       req.PromptVersion,
-		"PeriodStart":    formatTime(req.PeriodStart),
-		"PeriodEnd":      formatTime(req.PeriodEnd),
-		"CandidatesJSON": string(candidateJSON),
+		"PromptID":     req.PromptVersion,
+		"ArtifactID":   req.ArtifactID,
+		"ArtifactType": req.ArtifactType,
+		"Title":        req.Title,
+		"Class":        req.Class,
+		"EvidenceJSON": string(evidenceJSON),
 	})
 	if err != nil {
 		return ollamaChatRequest{}, err
@@ -150,6 +150,23 @@ func (c OllamaClient) chatRequest(req Request) (ollamaChatRequest, error) {
 	}, nil
 }
 
-func ActionItemSchema() map[string]any {
-	return prompts.ActionItemsSchema()
+func fieldEvidence(evidence []Evidence) []map[string]any {
+	out := make([]map[string]any, 0, len(evidence))
+	for _, item := range evidence {
+		out = append(out, map[string]any{
+			"evidence_id": item.ID,
+			"artifact_id": item.ArtifactID,
+			"chunk_id":    item.ChunkID,
+			"quote":       item.Quote,
+			"char_start":  item.CharStart,
+			"char_end":    item.CharEnd,
+			"page_start":  item.PageStart,
+			"page_end":    item.PageEnd,
+		})
+	}
+	return out
+}
+
+func FieldSchema() map[string]any {
+	return prompts.ArtifactFieldsSchema()
 }

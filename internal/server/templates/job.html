@@ -1,117 +1,106 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ .Job.Kind }} · {{ .AppName }}</title>
-    <style>{{ template "styles" . }}</style>
+    <title>{{ .Job.Kind }} &middot; {{ .AppName }}</title>
+    {{ template "head" . }}
   </head>
   <body>
     {{ template "topbar" . }}
-
     <main>
-      <a class="back" href="/">← Home</a>
-
-      <section class="section">
-        <div class="row">
-          <div>
-            <h2>{{ .Job.Kind }}</h2>
-            <p class="meta">
-              <span class="pill {{ .Job.Status }}">{{ .Job.Status }}</span>
-              <span class="pill">attempts {{ .Job.Attempts }}/{{ .Job.MaxAttempts }}</span>
-              {{ if .Job.Priority }}<span class="pill">priority {{ .Job.Priority }}</span>{{ end }}
-            </p>
-            <p class="value" style="margin-top:8px">{{ .Job.ID }}</p>
-          </div>
-          {{ if .ArtifactExists }}
-            <a class="button" href="/artifacts/{{ .ArtifactID }}">View artifact →</a>
-          {{ end }}
-        </div>
-      </section>
+      <a class="zora-back" href="/admin">&larr; System status</a>
+      <p class="zora-eyebrow">Job</p>
+      <h1>{{ .Job.Kind }}</h1>
+      <div class="zora-chips">
+        <span class="zora-chip {{ .Job.Status }}">{{ .Job.Status }}</span>
+        <span class="zora-chip">attempts {{ .Job.Attempts }}/{{ .Job.MaxAttempts }}</span>
+        {{ if .Job.Priority }}<span class="zora-chip">priority {{ .Job.Priority }}</span>{{ end }}
+      </div>
+      <p class="zora-meta" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;margin-top:6px">{{ .Job.ID }}</p>
+      {{ if .ArtifactExists }}
+        <p style="margin-top:12px"><a href="/library/{{ .ArtifactID }}">Open artifact &rarr;</a></p>
+      {{ end }}
 
       {{ if .Job.LastError.Valid }}
-        <section class="section">
-          <h3>Last error</h3>
-          <div class="panel">
-            <pre class="code error">{{ .Job.LastError.String }}</pre>
-          </div>
+        <section class="zora-section">
+          <h2>Last error</h2>
+          <pre style="white-space:pre-wrap;word-break:break-word;background:var(--pico-card-sectioning-background-color);border:1px solid var(--pico-muted-border-color);border-radius:var(--pico-border-radius);padding:14px;font-size:0.85rem;color:#9b1c1c">{{ .Job.LastError.String }}</pre>
         </section>
       {{ end }}
 
-      <section class="section">
-        <h3>Audit</h3>
-        <div class="panel">
-          <dl class="props">
-            <dt>Created at</dt><dd>{{ .Job.CreatedAt }}</dd>
-            <dt>Updated at</dt><dd>{{ .Job.UpdatedAt }}</dd>
-            <dt>Run after</dt><dd>{{ .Job.RunAfter }}</dd>
-            <dt>Finished at</dt><dd>{{ if .Job.FinishedAt.Valid }}{{ .Job.FinishedAt.String }}{{ else }}<span class="empty">not finished</span>{{ end }}</dd>
-            <dt>Locked by</dt><dd>{{ if .Job.LockedBy.Valid }}{{ .Job.LockedBy.String }}{{ if .Job.LockedAt.Valid }} (since {{ .Job.LockedAt.String }}){{ end }}{{ else }}<span class="empty">not held</span>{{ end }}</dd>
-            <dt>Dedupe key</dt><dd>{{ if .Job.DedupeKey.Valid }}{{ .Job.DedupeKey.String }}{{ else }}<span class="empty">none</span>{{ end }}</dd>
-          </dl>
-        </div>
+      <section class="zora-section zora-tech">
+        <details open>
+          <summary>Audit</summary>
+          <div>
+            <dl class="zora-props">
+              <dt>Created at</dt><dd>{{ .Job.CreatedAt }}</dd>
+              <dt>Updated at</dt><dd>{{ .Job.UpdatedAt }}</dd>
+              <dt>Run after</dt><dd>{{ .Job.RunAfter }}</dd>
+              <dt>Finished at</dt><dd>{{ if .Job.FinishedAt.Valid }}{{ .Job.FinishedAt.String }}{{ else }}<span class="zora-meta">not finished</span>{{ end }}</dd>
+              <dt>Locked by</dt><dd>{{ if .Job.LockedBy.Valid }}{{ .Job.LockedBy.String }}{{ if .Job.LockedAt.Valid }} (since {{ .Job.LockedAt.String }}){{ end }}{{ else }}<span class="zora-meta">not held</span>{{ end }}</dd>
+              <dt>Dedupe key</dt><dd>{{ if .Job.DedupeKey.Valid }}{{ .Job.DedupeKey.String }}{{ else }}<span class="zora-meta">none</span>{{ end }}</dd>
+            </dl>
+          </div>
+        </details>
       </section>
 
       {{ if .HasPayload }}
-        <section class="section">
-          <h3>Payload</h3>
-          <div class="panel">
-            <dl class="props">
-              <dt>Path</dt><dd>{{ .Payload.Path }}</dd>
-              <dt>Type</dt><dd>{{ .Payload.Type }}</dd>
-              <dt>MIME</dt><dd>{{ .Payload.MIMEType }}</dd>
-              <dt>Size</dt><dd>{{ .Payload.SizeBytes | humanBytes }} ({{ .Payload.SizeBytes }} B)</dd>
-              <dt>mtime</dt><dd>{{ .Payload.MTime }}</dd>
-              <dt>Title</dt><dd>{{ .Payload.Title }}</dd>
-              <dt>Content hash</dt><dd>{{ .Payload.ContentHash }}</dd>
-              <dt>Source ID</dt><dd>{{ .Payload.SourceID }}</dd>
-              <dt>Artifact ID</dt><dd>
-                {{ if .ArtifactExists }}
-                  <a href="/artifacts/{{ .ArtifactID }}">{{ .ArtifactID }}</a>
-                {{ else }}
-                  {{ .ArtifactID }} <span class="meta">(not yet persisted)</span>
-                {{ end }}
-              </dd>
-            </dl>
-          </div>
+        <section class="zora-section zora-tech">
+          <details>
+            <summary>Payload</summary>
+            <div>
+              <dl class="zora-props">
+                <dt>Path</dt><dd>{{ .Payload.Path }}</dd>
+                <dt>Type</dt><dd>{{ .Payload.Type }}</dd>
+                <dt>MIME</dt><dd>{{ .Payload.MIMEType }}</dd>
+                <dt>Size</dt><dd>{{ .Payload.SizeBytes | humanBytes }} ({{ .Payload.SizeBytes }} B)</dd>
+                <dt>mtime</dt><dd>{{ .Payload.MTime }}</dd>
+                <dt>Title</dt><dd>{{ .Payload.Title }}</dd>
+                <dt>Content hash</dt><dd>{{ .Payload.ContentHash }}</dd>
+                <dt>Source ID</dt><dd>{{ .Payload.SourceID }}</dd>
+                <dt>Artifact ID</dt><dd>
+                  {{ if .ArtifactExists }}<a href="/library/{{ .ArtifactID }}">{{ .ArtifactID }}</a>{{ else }}{{ .ArtifactID }} <span class="zora-meta">(not yet persisted)</span>{{ end }}
+                </dd>
+              </dl>
+            </div>
+          </details>
         </section>
       {{ end }}
 
       {{ if .HasResult }}
-        <section class="section">
-          <h3>Result</h3>
-          <div class="panel">
-            <dl class="props">
-              <dt>Artifact</dt><dd>
-                {{ if .Result.ArtifactID }}
-                  <a href="/artifacts/{{ .Result.ArtifactID }}">{{ .Result.ArtifactID }}</a>
-                {{ else }}<span class="empty">none</span>{{ end }}
-              </dd>
-              <dt>Content hash</dt><dd>{{ .Result.ContentHash }}</dd>
-              <dt>Extractor</dt><dd>{{ .Result.Extractor }}</dd>
-              <dt>Docling status</dt><dd><span class="pill {{ .ResultDoclingClass }}">{{ .Result.DoclingStatus }}</span></dd>
-              <dt>Processing time</dt><dd>{{ .Result.ProcessingTimeMS }} ms</dd>
-              <dt>Plain text</dt><dd>{{ .Result.TextChars }} chars</dd>
-              <dt>Markdown</dt><dd>{{ .Result.MarkdownChars }} chars</dd>
-              <dt>Chunks</dt><dd>{{ .Result.ChunkCount }}</dd>
-            </dl>
-          </div>
+        <section class="zora-section zora-tech">
+          <details>
+            <summary>Result</summary>
+            <div>
+              <dl class="zora-props">
+                <dt>Artifact</dt><dd>
+                  {{ if .Result.ArtifactID }}<a href="/library/{{ .Result.ArtifactID }}">{{ .Result.ArtifactID }}</a>{{ else }}<span class="zora-meta">none</span>{{ end }}
+                </dd>
+                <dt>Content hash</dt><dd>{{ .Result.ContentHash }}</dd>
+                <dt>Extractor</dt><dd>{{ .Result.Extractor }}</dd>
+                <dt>Docling status</dt><dd>{{ .Result.DoclingStatus }}</dd>
+                <dt>Processing time</dt><dd>{{ .Result.ProcessingTimeMS }} ms</dd>
+                <dt>Plain text</dt><dd>{{ .Result.TextChars }} chars</dd>
+                <dt>Markdown</dt><dd>{{ .Result.MarkdownChars }} chars</dd>
+                <dt>Chunks</dt><dd>{{ .Result.ChunkCount }}</dd>
+              </dl>
+            </div>
+          </details>
         </section>
       {{ end }}
 
-      <section class="section">
-        <h3>Raw JSON</h3>
-        <details class="expand">
-          <summary>Payload JSON</summary>
-          <pre class="code">{{ .Job.PayloadJSON | prettyJSON }}</pre>
+      <section class="zora-section zora-tech">
+        <details>
+          <summary>Raw payload JSON</summary>
+          <div><pre>{{ .Job.PayloadJSON | prettyJSON }}</pre></div>
         </details>
         {{ if .Job.ResultJSON.Valid }}
-          <details class="expand">
-            <summary>Result JSON</summary>
-            <pre class="code">{{ .Job.ResultJSON.String | prettyJSON }}</pre>
+          <details>
+            <summary>Raw result JSON</summary>
+            <div><pre>{{ .Job.ResultJSON.String | prettyJSON }}</pre></div>
           </details>
         {{ end }}
       </section>
     </main>
+    {{ template "footer" . }}
   </body>
 </html>

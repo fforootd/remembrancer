@@ -18,6 +18,7 @@ import (
 	"zora/internal/extract"
 	"zora/internal/ingest"
 	"zora/internal/jobs"
+	"zora/internal/pipeline"
 	"zora/internal/server"
 )
 
@@ -92,6 +93,13 @@ func runServe(args []string, stdout, stderr io.Writer) int {
 			return 1
 		}
 		jobStore := jobs.Store{DB: database}
+		assistantPipeline := pipeline.Runner{
+			DB:                   database,
+			FieldReasoner:        buildFieldReasoner(cfg),
+			FieldModelName:       cfg.LLM.Model,
+			IgnoreReasonerErrors: true,
+			Logger:               logger,
+		}
 		ingestService = &ingest.Service{
 			Scanner: ingest.Scanner{
 				DB:             database,
@@ -105,6 +113,7 @@ func runServe(args []string, stdout, stderr io.Writer) int {
 				DB:        database,
 				Blobs:     blobs.Store{ArchiveRoot: cfg.Paths.Archive},
 				Extractor: extractor,
+				Pipeline:  &assistantPipeline,
 				Owner:     cfg.User.ID,
 			},
 			ScanInterval: cfg.Ingest.ScanInterval,
@@ -154,6 +163,21 @@ func runServe(args []string, stdout, stderr io.Writer) int {
 func runVersion(stdout io.Writer) int {
 	fmt.Fprintf(stdout, "zora %s\ncommit: %s\nbuilt: %s\n", version, commit, date)
 	return 0
+}
+
+func buildFieldReasoner(cfg config.Config) pipeline.FactReasoner {
+	if !cfg.LLM.Enabled || cfg.LLM.Provider != "ollama" {
+		return nil
+	}
+	return pipeline.OllamaFieldClient{
+		BaseURL:         cfg.LLM.BaseURL,
+		Model:           cfg.LLM.Model,
+		Timeout:         cfg.LLM.Timeout,
+		ContextTokens:   cfg.LLM.ContextTokens,
+		MaxOutputTokens: min(cfg.LLM.MaxOutputTokens, 768),
+		Temperature:     cfg.LLM.Temperature,
+		HTTPClient:      &http.Client{Timeout: cfg.LLM.Timeout},
+	}
 }
 
 func buildExtractor(cfg config.Config) (extract.Extractor, error) {

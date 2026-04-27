@@ -84,6 +84,10 @@ ignored by git.
 For separate service logs, run `make run-docling`, `make run-ollama`, and
 `make run-zora` in separate terminals.
 
+Local dev defaults to the fast `gemma4:e2b-it-q4_K_M` model. For a slower but
+stronger local ingest pass on 16GB+ Macs, use `qwen3.5:9b-q4_K_M` and update
+`llm.model` in your active config.
+
 ## Package
 
 GoReleaser builds local release artifacts:

@@ -11,26 +11,29 @@ import (
 	"zora/internal/blobs"
 	"zora/internal/extract"
 	"zora/internal/jobs"
+	"zora/internal/pipeline"
 )
 
 type FileHandler struct {
 	DB        *sql.DB
 	Blobs     blobs.Store
 	Extractor extract.Extractor
+	Pipeline  *pipeline.Runner
 	Owner     string
 	Now       func() time.Time
 }
 
 type JobResult struct {
-	ArtifactID       string `json:"artifact_id"`
-	ContentHash      string `json:"content_hash"`
-	ExtractedChars   int    `json:"extracted_chars"`
-	TextChars        int    `json:"text_chars"`
-	MarkdownChars    int    `json:"markdown_chars"`
-	ChunkCount       int    `json:"chunk_count"`
-	Extractor        string `json:"extractor"`
-	DoclingStatus    string `json:"docling_status"`
-	ProcessingTimeMS int64  `json:"processing_time_ms"`
+	ArtifactID       string                  `json:"artifact_id"`
+	ContentHash      string                  `json:"content_hash"`
+	ExtractedChars   int                     `json:"extracted_chars"`
+	TextChars        int                     `json:"text_chars"`
+	MarkdownChars    int                     `json:"markdown_chars"`
+	ChunkCount       int                     `json:"chunk_count"`
+	Extractor        string                  `json:"extractor"`
+	DoclingStatus    string                  `json:"docling_status"`
+	ProcessingTimeMS int64                   `json:"processing_time_ms"`
+	Pipeline         *pipeline.ProcessResult `json:"pipeline,omitempty"`
 }
 
 func (h FileHandler) HandleJob(ctx context.Context, job jobs.Job) (string, error) {
@@ -78,6 +81,13 @@ func (h FileHandler) HandleJob(ctx context.Context, job jobs.Job) (string, error
 	if err != nil {
 		return "", err
 	}
+	var pipelineResult pipeline.ProcessResult
+	if h.Pipeline != nil {
+		pipelineResult, err = h.Pipeline.ProcessArtifact(ctx, artifactID)
+		if err != nil {
+			return "", err
+		}
+	}
 
 	result := JobResult{
 		ArtifactID:       artifactID,
@@ -89,6 +99,9 @@ func (h FileHandler) HandleJob(ctx context.Context, job jobs.Job) (string, error
 		Extractor:        extracted.Extractor,
 		DoclingStatus:    extractionStatus(extracted),
 		ProcessingTimeMS: extracted.ProcessingTime.Milliseconds(),
+	}
+	if pipelineResult.ArtifactID != "" {
+		result.Pipeline = &pipelineResult
 	}
 	data, err := json.Marshal(result)
 	if err != nil {

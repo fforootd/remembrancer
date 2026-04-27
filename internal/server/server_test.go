@@ -48,6 +48,83 @@ func TestIndexIncludesAppName(t *testing.T) {
 	}
 }
 
+func TestTodayEmptyState(t *testing.T) {
+	handler := newTestServer(t)
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())
+	}
+	body := recorder.Body.String()
+	if !strings.Contains(body, "No briefing yet") || !strings.Contains(body, "Today") {
+		t.Fatalf("today body = %s", body)
+	}
+}
+
+func TestAdminRouteShowsRuntime(t *testing.T) {
+	handler := newTestServer(t)
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/admin", nil)
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())
+	}
+	body := recorder.Body.String()
+	if !strings.Contains(body, "System status") || !strings.Contains(body, "Ingest queue") {
+		t.Fatalf("admin body = %s", body)
+	}
+}
+
+func TestActionItemsGetRedirectsToBriefings(t *testing.T) {
+	handler := newTestServer(t)
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/action-items", nil)
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusMovedPermanently {
+		t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())
+	}
+	if got := recorder.Header().Get("Location"); got != "/briefings" {
+		t.Fatalf("Location = %q", got)
+	}
+}
+
+func TestStaticPicoServed(t *testing.T) {
+	handler := newTestServer(t)
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/static/pico.min.css", nil)
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d", recorder.Code)
+	}
+	if !strings.Contains(recorder.Header().Get("Content-Type"), "text/css") {
+		t.Fatalf("content-type = %q", recorder.Header().Get("Content-Type"))
+	}
+}
+
+func TestLibraryAliasRendersList(t *testing.T) {
+	handler := newTestServer(t)
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/library", nil)
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), "Library") {
+		t.Fatalf("library body = %s", recorder.Body.String())
+	}
+}
+
 func TestActionItemsPreviewWhenLLMDisabled(t *testing.T) {
 	handler, database := newTestServerWithConfig(t, config.Default())
 	start := time.Date(2026, 4, 20, 0, 0, 0, 0, time.UTC)
@@ -61,7 +138,7 @@ func TestActionItemsPreviewWhenLLMDisabled(t *testing.T) {
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())
 	}
-	if !strings.Contains(recorder.Body.String(), "Candidate Preview") || !strings.Contains(recorder.Body.String(), "School form") {
+	if !strings.Contains(recorder.Body.String(), "Candidates") || !strings.Contains(recorder.Body.String(), "School form") {
 		t.Fatalf("body = %s", recorder.Body.String())
 	}
 	var count int
@@ -134,13 +211,13 @@ func TestActionItemsPageListsRecentRuns(t *testing.T) {
 	}
 
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodGet, "/action-items", nil)
+	request := httptest.NewRequest(http.MethodGet, "/briefings", nil)
 	handler.ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())
 	}
-	if !strings.Contains(recorder.Body.String(), "Recent Runs") ||
+	if !strings.Contains(recorder.Body.String(), "Past briefings") ||
 		!strings.Contains(recorder.Body.String(), "Action items: 2026-04-20 to 2026-04-27") {
 		t.Fatalf("body = %s", recorder.Body.String())
 	}
@@ -166,7 +243,7 @@ func TestActionItemsGenerateFailureRendersPageWithCandidates(t *testing.T) {
 	body := recorder.Body.String()
 	if !strings.Contains(body, "Generation failed") ||
 		!strings.Contains(body, "ollama timed out") ||
-		!strings.Contains(body, "Candidate Preview") ||
+		!strings.Contains(body, "Candidates") ||
 		!strings.Contains(body, "School form") {
 		t.Fatalf("body = %s", body)
 	}

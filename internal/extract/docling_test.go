@@ -47,8 +47,8 @@ func TestDoclingExtractorPostsMultipartAndParsesResult(t *testing.T) {
 		w.Header().Set("X-Docling-Version", "1.17.0")
 		json.NewEncoder(w).Encode(map[string]any{
 			"document": map[string]any{
-				"md_content":   "# Receipt\n\nTotal due",
-				"text_content": "Receipt\nTotal due",
+				"md_content":   "# Receipt\n\nTotal due for the annual insurance policy renewal.",
+				"text_content": "Receipt\nTotal due for the annual insurance policy renewal.",
 				"json_content": map[string]any{"schema": "docling"},
 			},
 			"status":          "success",
@@ -85,7 +85,7 @@ func TestDoclingExtractorPostsMultipartAndParsesResult(t *testing.T) {
 	if !reflect.DeepEqual(gotFormats, []string{"md", "text", "json"}) {
 		t.Fatalf("to_formats = %#v", gotFormats)
 	}
-	if result.Markdown != "# Receipt\n\nTotal due" || result.Text != "Receipt\nTotal due" {
+	if result.Markdown != "# Receipt\n\nTotal due for the annual insurance policy renewal." || result.Text != "Receipt\nTotal due for the annual insurance policy renewal." {
 		t.Fatalf("result = %+v", result)
 	}
 	if result.StructuredJSON == "" || result.MetadataJSON == "" {
@@ -138,11 +138,84 @@ func TestDoclingExtractorPartialSuccessReturnsWarnings(t *testing.T) {
 	if err := os.WriteFile(path, []byte("fake"), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
-	result, err := (DoclingExtractor{BaseURL: server.URL, Timeout: time.Minute}).Extract(context.Background(), path, TypePDF)
+	result, err := (DoclingExtractor{BaseURL: server.URL, ForceOCR: true, Timeout: time.Minute}).Extract(context.Background(), path, TypePDF)
 	if err != nil {
 		t.Fatalf("Extract: %v", err)
 	}
 	if result.Status != "partial_success" || !reflect.DeepEqual(result.Warnings, []string{"page 2 failed"}) {
 		t.Fatalf("result = %+v", result)
+	}
+}
+
+func TestDoclingExtractorForcesOCRForImages(t *testing.T) {
+	var gotDoOCR string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseMultipartForm(1 << 20); err != nil {
+			t.Fatalf("ParseMultipartForm: %v", err)
+		}
+		gotDoOCR = r.MultipartForm.Value["do_ocr"][0]
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"document": map[string]any{"md_content": "Image text with enough useful OCR content.", "text_content": "Image text with enough useful OCR content."},
+			"status":   "success",
+			"errors":   []any{},
+		})
+	}))
+	defer server.Close()
+
+	path := filepath.Join(t.TempDir(), "scan.png")
+	if err := os.WriteFile(path, []byte("fake"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	if _, err := (DoclingExtractor{BaseURL: server.URL, DoOCR: false, Timeout: time.Minute}).Extract(context.Background(), path, TypeImage); err != nil {
+		t.Fatalf("Extract: %v", err)
+	}
+	if gotDoOCR != "true" {
+		t.Fatalf("do_ocr = %q", gotDoOCR)
+	}
+}
+
+func TestDoclingExtractorRetriesLowTextPDFWithForcedOCR(t *testing.T) {
+	var calls int
+	var forceValues []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if err := r.ParseMultipartForm(1 << 20); err != nil {
+			t.Fatalf("ParseMultipartForm: %v", err)
+		}
+		forceValues = append(forceValues, r.MultipartForm.Value["force_ocr"][0])
+		w.Header().Set("Content-Type", "application/json")
+		if calls == 1 {
+			json.NewEncoder(w).Encode(map[string]any{
+				"document": map[string]any{"md_content": "", "text_content": ""},
+				"status":   "success",
+				"errors":   []any{},
+			})
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]any{
+			"document": map[string]any{"md_content": "Recovered OCR text with enough words to trust.", "text_content": "Recovered OCR text with enough words to trust."},
+			"status":   "success",
+			"errors":   []any{},
+		})
+	}))
+	defer server.Close()
+
+	path := filepath.Join(t.TempDir(), "scan.pdf")
+	if err := os.WriteFile(path, []byte("%PDF fake"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	result, err := (DoclingExtractor{BaseURL: server.URL, Timeout: time.Minute}).Extract(context.Background(), path, TypePDF)
+	if err != nil {
+		t.Fatalf("Extract: %v", err)
+	}
+	if calls != 2 {
+		t.Fatalf("calls = %d", calls)
+	}
+	if !reflect.DeepEqual(forceValues, []string{"false", "true"}) {
+		t.Fatalf("force_ocr values = %#v", forceValues)
+	}
+	if result.Text != "Recovered OCR text with enough words to trust." {
+		t.Fatalf("text = %q", result.Text)
 	}
 }

@@ -1,53 +1,66 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Artifacts · {{ .AppName }}</title>
-    <style>{{ template "styles" . }}</style>
+    <title>Library &middot; {{ .AppName }}</title>
+    {{ template "head" . }}
   </head>
   <body>
     {{ template "topbar" . }}
     <main>
-      <h2>Artifacts</h2>
-      <p class="subtitle">All ingested artifacts, newest first.</p>
+      <p class="zora-eyebrow">Library</p>
+      <h1>Everything you&rsquo;ve ingested</h1>
+      <p class="zora-meta">Browse what Zora has on file, newest first.</p>
 
-      <section class="section" aria-label="Filter">
-        <div class="panel">
-          <form class="inline-form" method="get" action="/artifacts">
-            <label class="field">
-              <span class="label">Type</span>
+      <section class="zora-section" aria-label="Filter">
+        <article class="zora-item">
+          <form class="zora-inline-form" method="get" action="/library">
+            <label>
+              <span>Type</span>
               <select name="type">
                 {{ $current := .Type }}
                 {{ range .Types }}
-                  <option value="{{ . }}" {{ if eq . $current }}selected{{ end }}>{{ . }}</option>
+                  <option value="{{ . }}" {{ if eq . $current }}selected{{ end }}>{{ if eq . "all" }}All{{ else }}{{ humaneTypePlural . }}{{ end }}</option>
                 {{ end }}
               </select>
             </label>
-            <label class="field">
-              <span class="label">Since</span>
+            <label>
+              <span>Since</span>
               <input type="date" name="since" value="{{ .Since }}">
             </label>
-            <label class="field">
-              <span class="label">Limit</span>
-              <input type="number" name="limit" value="{{ .Limit }}" min="1" max="200" step="10" style="width:100px">
+            <label>
+              <span>Limit</span>
+              <input type="number" name="limit" value="{{ .Limit }}" min="1" max="200" step="10" style="max-width:110px">
             </label>
-            <button class="button" type="submit">Apply</button>
+            <button type="submit">Apply</button>
           </form>
-          {{ if .ErrorMessage }}<p class="meta error" style="margin-top:8px">{{ .ErrorMessage }}</p>{{ end }}
-        </div>
+          {{ if .ErrorMessage }}<p class="zora-meta zora-status-error" style="margin-top:8px">{{ .ErrorMessage }}</p>{{ end }}
+        </article>
       </section>
 
-      <section class="section" aria-label="Results">
-        <h3>{{ len .Items }} artifact{{ if ne (len .Items) 1 }}s{{ end }}</h3>
-        <div class="list">
-          {{ range .Items }}
-            {{ template "artifactCard" . }}
+      <section class="zora-section" aria-label="Items">
+        {{ if .Items }}
+          {{ if .Groups }}
+            {{ range .Groups }}
+              <div class="zora-library-group">
+                <h3>{{ .Label }} <span class="zora-category-count">{{ len .Items }}</span></h3>
+                <div class="zora-stack">
+                  {{ range .Items }}{{ template "artifactCard" . }}{{ end }}
+                </div>
+              </div>
+            {{ end }}
           {{ else }}
-            <p class="empty">No artifacts match the current filter.</p>
+            <div class="zora-stack">
+              {{ range .Items }}{{ template "artifactCard" . }}{{ end }}
+            </div>
           {{ end }}
-        </div>
+        {{ else }}
+          <div class="zora-empty">
+            <h2>Nothing here yet</h2>
+            <p>Drop a file into your watch folder and it will show up here.</p>
+          </div>
+        {{ end }}
       </section>
     </main>
+    {{ template "footer" . }}
   </body>
 </html>

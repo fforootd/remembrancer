@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <title>Today &middot; {{ .AppName }}</title>
+    {{ template "head" . }}
+  </head>
+  <body>
+    {{ template "topbar" . }}
+    <main>
+      <section class="zora-hero">
+        <p class="zora-eyebrow">Today</p>
+        <h1>{{ if .UserName }}Here&rsquo;s what&rsquo;s on your plate, {{ .UserName }}.{{ else }}Here&rsquo;s what&rsquo;s on your plate.{{ end }}</h1>
+        {{ if .HasBriefing }}
+          <p class="zora-meta">Latest briefing: <a href="/briefings/{{ .LatestBriefing.ID }}">{{ .LatestBriefing.Title }}</a> &middot; {{ humaneDate .LatestBriefing.CreatedAt }}</p>
+        {{ end }}
+      </section>
+
+      {{ if not .HasBriefing }}
+        <div class="zora-empty">
+          <h2>No briefing yet</h2>
+          <p>Generate a briefing to see what arrived recently and what needs your attention.</p>
+          {{ if .LLMEnabled }}
+            <form method="post" action="/action-items">
+              <input type="hidden" name="period_start" value="{{ .PeriodStartDate }}">
+              <input type="hidden" name="period_end" value="{{ .PeriodEndDate }}">
+              <button type="submit">Generate this week&rsquo;s briefing</button>
+            </form>
+          {{ else }}
+            <p class="zora-meta">Reasoning is disabled. Enable an LLM in <a href="/admin">system settings</a> to generate briefings.</p>
+          {{ end }}
+        </div>
+      {{ end }}
+
+      {{ if .ComingUp }}
+        <section class="zora-section" aria-label="Coming up">
+          <div class="zora-section-header">
+            <h2>Coming up</h2>
+            <p class="zora-meta">{{ len .ComingUp }} item{{ if ne (len .ComingUp) 1 }}s{{ end }} in the next two weeks</p>
+          </div>
+          <div class="zora-stack">
+            {{ range .ComingUp }}{{ template "todayCard" . }}{{ end }}
+          </div>
+        </section>
+      {{ end }}
+
+      {{ if .Categories }}
+        <section class="zora-section" aria-label="From your latest briefing">
+          <div class="zora-section-header">
+            <h2>From your latest briefing</h2>
+            <p class="zora-meta"><a href="/briefings/{{ .LatestBriefing.ID }}">Open the full briefing</a></p>
+          </div>
+          {{ range .Categories }}
+            <div class="zora-category">
+              <h3>
+                <span>{{ .Label }}</span>
+                <span class="zora-category-count">{{ len .Items }}</span>
+              </h3>
+              <div class="zora-stack">
+                {{ range .Items }}{{ template "todayCard" . }}{{ end }}
+              </div>
+            </div>
+          {{ end }}
+        </section>
+      {{ end }}
+
+      {{ if .WorthRemember }}
+        <section class="zora-section" aria-label="Worth remembering">
+          <div class="zora-section-header">
+            <h2>Worth remembering</h2>
+            <p class="zora-meta">From recent briefings</p>
+          </div>
+          <div class="zora-stack">
+            {{ range .WorthRemember }}{{ template "todayCard" . }}{{ end }}
+          </div>
+        </section>
+      {{ end }}
+
+      {{ if and .HasBriefing (not .ComingUp) (not .Categories) (not .WorthRemember) }}
+        <div class="zora-empty">
+          <h2>Nothing pressing</h2>
+          <p>No items from recent briefings need attention right now.</p>
+        </div>
+      {{ end }}
+    </main>
+    {{ template "footer" . }}
+  </body>
+</html>
+
+{{ define "todayCard" }}
+<article class="zora-item">
+  <header style="margin:0 0 6px">
+    {{ if or .DueLabel (ne .Item.SourceStatus "verified") }}
+      <div class="zora-chips">
+        {{ if .DueLabel }}<span class="zora-chip {{ .DueClass }}">{{ .DueLabel }}</span>{{ end }}
+        {{ if eq .Item.SourceStatus "unverified" }}<span class="zora-chip zora-chip--review">Needs review</span>{{ end }}
+      </div>
+    {{ end }}
+    <p class="zora-item-title">{{ .Item.Title }}</p>
+  </header>
+  {{ if .Item.Summary }}<p class="zora-item-summary">{{ .Item.Summary }}</p>{{ end }}
+  {{ if .Item.WhyItMatters }}<p class="zora-item-why">{{ .Item.WhyItMatters }}</p>{{ end }}
+  {{ if .Item.Artifacts }}
+    <p class="zora-item-source">
+      From
+      {{ range $i, $a := .Item.Artifacts }}
+        {{ if $i }}, {{ end }}<a href="/library/{{ $a.ID }}">{{ if $a.Title }}{{ $a.Title }}{{ else }}{{ humaneType $a.Type }}{{ end }}</a>
+      {{ end }}
+    </p>
+  {{ end }}
+  <div class="zora-actions">
+    <button type="button" disabled title="Coming soon">Mark done</button>
+    <button type="button" disabled title="Coming soon">Snooze</button>
+    {{ if .Item.Artifacts }}
+      <a class="zora-actions-link" href="/library/{{ (index .Item.Artifacts 0).ID }}">Open source &rarr;</a>
+    {{ end }}
+    <a class="zora-actions-link" href="/briefings/{{ .BriefingID }}">In briefing &rarr;</a>
+  </div>
+</article>
+{{ end }}
