@@ -31,7 +31,7 @@ func TestOllamaClientRequestsStructuredChat(t *testing.T) {
 
 	client := OllamaClient{
 		BaseURL:         server.URL,
-		Model:           "qwen3.5:9b-q4_K_M",
+		Model:           "gemma4:e2b-it-q4_K_M",
 		ContextTokens:   8192,
 		MaxOutputTokens: 1024,
 		Temperature:     0.1,
@@ -52,7 +52,7 @@ func TestOllamaClientRequestsStructuredChat(t *testing.T) {
 	if len(response.Items) != 1 {
 		t.Fatalf("response = %#v", response)
 	}
-	if got.Model != "qwen3.5:9b-q4_K_M" || got.Stream {
+	if got.Model != "gemma4:e2b-it-q4_K_M" || got.Stream {
 		t.Fatalf("request model/stream = %q/%v", got.Model, got.Stream)
 	}
 	if got.Options.NumCtx != 8192 || got.Options.NumPredict != 1024 || got.Options.Temperature != 0.1 {

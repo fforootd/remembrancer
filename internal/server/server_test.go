@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -113,6 +114,68 @@ func TestActionItemsGenerateWithFakeReasoner(t *testing.T) {
 	}
 	if !strings.Contains(recorder.Body.String(), "Return school form") || !strings.Contains(recorder.Body.String(), "art_school") {
 		t.Fatalf("briefing body = %s", recorder.Body.String())
+	}
+}
+
+func TestActionItemsPageListsRecentRuns(t *testing.T) {
+	handler, database := newTestServerWithConfig(t, config.Default())
+	start := time.Date(2026, 4, 20, 0, 0, 0, 0, time.UTC)
+	_, err := actionitems.Repository{DB: database}.CreateRun(context.Background(), actionitems.CreateRunParams{
+		PeriodStart:   start,
+		PeriodEnd:     start.AddDate(0, 0, 7),
+		ModelName:     "test-model",
+		PromptVersion: actionitems.PromptVersion,
+		Now: func() time.Time {
+			return start.AddDate(0, 0, 7)
+		},
+	})
+	if err != nil {
+		t.Fatalf("create action item run: %v", err)
+	}
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/action-items", nil)
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), "Recent Runs") ||
+		!strings.Contains(recorder.Body.String(), "Action items: 2026-04-20 to 2026-04-27") {
+		t.Fatalf("body = %s", recorder.Body.String())
+	}
+}
+
+func TestActionItemsGenerateFailureRendersPageWithCandidates(t *testing.T) {
+	cfg := config.Default()
+	cfg.LLM.Enabled = true
+	handler, database := newTestServerWithConfig(t, cfg, WithActionItemReasoner(fakeReasoner{
+		err: errors.New("ollama timed out"),
+	}))
+	start := time.Date(2026, 4, 20, 0, 0, 0, 0, time.UTC)
+	insertServerArtifact(t, database, "art_school", "pdf", "School form", start.Add(24*time.Hour), "Please return the school form by Friday.")
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/action-items", strings.NewReader("period_start=2026-04-20&period_end=2026-04-27"))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())
+	}
+	body := recorder.Body.String()
+	if !strings.Contains(body, "Generation failed") ||
+		!strings.Contains(body, "ollama timed out") ||
+		!strings.Contains(body, "Candidate Preview") ||
+		!strings.Contains(body, "School form") {
+		t.Fatalf("body = %s", body)
+	}
+	var count int
+	if err := database.QueryRow(`SELECT COUNT(*) FROM briefing`).Scan(&count); err != nil {
+		t.Fatalf("count briefings: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("briefing count = %d", count)
 	}
 }
 

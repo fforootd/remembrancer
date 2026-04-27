@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Artifacts · {{ .AppName }}</title>
+    <style>{{ template "styles" . }}</style>
+  </head>
+  <body>
+    {{ template "topbar" . }}
+    <main>
+      <h2>Artifacts</h2>
+      <p class="subtitle">All ingested artifacts, newest first.</p>
+
+      <section class="section" aria-label="Filter">
+        <div class="panel">
+          <form class="inline-form" method="get" action="/artifacts">
+            <label class="field">
+              <span class="label">Type</span>
+              <select name="type">
+                {{ $current := .Type }}
+                {{ range .Types }}
+                  <option value="{{ . }}" {{ if eq . $current }}selected{{ end }}>{{ . }}</option>
+                {{ end }}
+              </select>
+            </label>
+            <label class="field">
+              <span class="label">Since</span>
+              <input type="date" name="since" value="{{ .Since }}">
+            </label>
+            <label class="field">
+              <span class="label">Limit</span>
+              <input type="number" name="limit" value="{{ .Limit }}" min="1" max="200" step="10" style="width:100px">
+            </label>
+            <button class="button" type="submit">Apply</button>
+          </form>
+          {{ if .ErrorMessage }}<p class="meta error" style="margin-top:8px">{{ .ErrorMessage }}</p>{{ end }}
+        </div>
+      </section>
+
+      <section class="section" aria-label="Results">
+        <h3>{{ len .Items }} artifact{{ if ne (len .Items) 1 }}s{{ end }}</h3>
+        <div class="list">
+          {{ range .Items }}
+            {{ template "artifactCard" . }}
+          {{ else }}
+            <p class="empty">No artifacts match the current filter.</p>
+          {{ end }}
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

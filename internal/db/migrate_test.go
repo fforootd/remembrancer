@@ -148,7 +148,7 @@ VALUES ('hash_1', 'sha256', 3, '/tmp/hash_1', '2026-01-01T00:00:00Z');
 INSERT INTO artifact (id, type, source, source_id, title, owner, content_hash, captured_at, event_at, created_at)
 VALUES ('art_1', 'text', 'watch_folder', 'source_1', 'School form', 'florian', 'hash_1', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
 INSERT INTO briefing (id, period_start, period_end, title, source_query_json, model_name, prompt_version, created_at)
-VALUES ('brf_1', '2026-01-01T00:00:00Z', '2026-01-08T00:00:00Z', 'Action items: 2026-01-01 to 2026-01-08', '{}', 'qwen3.5:9b-q4_K_M', 'action-items-v1', '2026-01-08T00:00:00Z');
+VALUES ('brf_1', '2026-01-01T00:00:00Z', '2026-01-08T00:00:00Z', 'Action items: 2026-01-01 to 2026-01-08', '{}', 'gemma4:e2b-it-q4_K_M', 'action-items-v1', '2026-01-08T00:00:00Z');
 INSERT INTO briefing_item (id, briefing_id, category, title, summary, action_text, source_status, sort_order, created_at)
 VALUES ('bri_1', 'brf_1', 'needs_action', 'Return school form', 'A form needs to be returned.', 'Return the form.', 'verified', 0, '2026-01-08T00:00:00Z');
 INSERT INTO briefing_item_artifact (briefing_item_id, artifact_id, snippet)

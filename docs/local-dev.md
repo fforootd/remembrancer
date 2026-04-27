@@ -21,7 +21,7 @@ make dev
   directories, installs Ollama unless `ZORA_SKIP_OLLAMA_SETUP=1`, installs
   systemd units, and creates `/opt/zora/docling`.
 
-`make llm-pull` downloads `${ZORA_LLM_MODEL:-qwen3.5:9b-q4_K_M}`. It is skipped
+`make llm-pull` downloads `${ZORA_LLM_MODEL:-gemma4:e2b-it-q4_K_M}`. It is skipped
 by setup so first install stays quick and does not immediately consume several
 GB of disk.
 
@@ -116,13 +116,18 @@ If you change Docling's port, update `extract.docling.base_url` in the active
 Zora config too.
 
 Local development enables `llm.enabled` in `config/example.yaml` and uses Ollama
-at `http://127.0.0.1:11434` with `qwen3.5:9b-q4_K_M`. To use a different model
-for make targets:
+at `http://127.0.0.1:11434` with `gemma4:e2b-it-q4_K_M`. The dev config gives
+generation a longer timeout because the first request may cold-load the model.
+To use a different model for make targets:
 
 ```sh
 ZORA_LLM_MODEL=gemma4:e4b make llm-pull
 ZORA_LLM_MODEL=gemma4:e4b make dev
 ```
+
+For a lighter Qwen comparison, override the model with `qwen3.5:4b-q4_K_M`.
+For a slower Qwen quality-mode pass, use `qwen3.5:9b-q4_K_M`. Update
+`llm.model` in the active config to match whichever model you run.
 
 ## Doctor
 
@@ -163,6 +168,8 @@ The first start can be slow while Python packages or model artifacts settle.
 If Ollama is not reachable, run `make run-ollama` directly and watch its logs.
 If Ollama is reachable but action-item generation complains about a missing
 model, run `make llm-pull`.
+If generation times out near the configured `llm.timeout`, restart `make dev`
+after increasing that value in the active config, then retry from `/action-items`.
 
 If Zora is not reachable, check whether port `8787` is already in use, then run
 `make run-zora` directly.

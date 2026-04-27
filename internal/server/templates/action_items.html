@@ -13,6 +13,15 @@
       <h2>Action Items</h2>
       <p class="subtitle">{{ if .LLMEnabled }}Generate source-linked action items with {{ .LLMModel }}.{{ else }}LLM is disabled; this page previews deterministic candidates only.{{ end }}</p>
 
+      {{ if .ErrorMessage }}
+        <section class="section" aria-label="Action item error">
+          <div class="alert error-alert">
+            <p><strong>Generation failed</strong></p>
+            <p class="meta">{{ .ErrorMessage }}</p>
+          </div>
+        </section>
+      {{ end }}
+
       <section class="section" aria-label="Action item generator">
         <div class="panel">
           <form class="inline-form" method="post" action="/action-items">
@@ -26,6 +35,26 @@
             </label>
             <button class="button" type="submit">{{ if .LLMEnabled }}Generate{{ else }}Preview candidates{{ end }}</button>
           </form>
+        </div>
+      </section>
+
+      <section class="section" aria-label="Recent action item runs">
+        <h2>Recent Runs</h2>
+        <div class="list">
+          {{ range .RecentRuns }}
+            <a class="item-link" href="/briefings/{{ .ID }}">
+              <div class="item">
+                <div class="row">
+                  <div>
+                    <p><strong>{{ .Title }}</strong></p>
+                    <p class="meta">{{ .ItemCount }} items &middot; {{ .ModelName }} &middot; {{ .CreatedAt }}</p>
+                  </div>
+                </div>
+              </div>
+            </a>
+          {{ else }}
+            <p class="empty">No action item runs yet.</p>
+          {{ end }}
         </div>
       </section>
 

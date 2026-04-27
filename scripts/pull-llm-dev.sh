@@ -5,7 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OLLAMA_BIND="${OLLAMA_BIND:-${OLLAMA_HOST:-127.0.0.1:11434}}"
 OLLAMA_BASE_URL="${OLLAMA_BASE_URL:-http://$OLLAMA_BIND}"
 OLLAMA_HEALTH_URL="${OLLAMA_HEALTH_URL:-$OLLAMA_BASE_URL/api/tags}"
-ZORA_LLM_MODEL="${ZORA_LLM_MODEL:-qwen3.5:9b-q4_K_M}"
+ZORA_LLM_MODEL="${ZORA_LLM_MODEL:-gemma4:e2b-it-q4_K_M}"
 
 started_pid=""
 

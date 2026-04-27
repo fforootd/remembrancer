@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Search · {{ .AppName }}</title>
+    <style>{{ template "styles" . }}</style>
+  </head>
+  <body>
+    {{ template "topbar" . }}
+    <main>
+      <h2>Search</h2>
+      <p class="subtitle">Full-text search across extracted artifact text.</p>
+
+      <section class="section" aria-label="Search query">
+        <div class="panel">
+          <form class="inline-form" method="get" action="/search">
+            <label class="field" style="flex:1;min-width:240px;">
+              <span class="label">Query</span>
+              <input type="search" name="q" value="{{ .Query }}" placeholder="bills, school, passport…" autofocus>
+            </label>
+            <label class="field">
+              <span class="label">Type</span>
+              <select name="type">
+                {{ $current := .Type }}
+                {{ range .Types }}
+                  <option value="{{ . }}" {{ if eq . $current }}selected{{ end }}>{{ . }}</option>
+                {{ end }}
+              </select>
+            </label>
+            <button class="button" type="submit">Search</button>
+          </form>
+          {{ if .ErrorMessage }}<p class="meta error" style="margin-top:8px">{{ .ErrorMessage }}</p>{{ end }}
+        </div>
+      </section>
+
+      {{ if .HasResults }}
+        <section class="section" aria-label="Search results">
+          <h3>{{ len .Results }} result{{ if ne (len .Results) 1 }}s{{ end }}</h3>
+          {{ $query := .Query }}
+          <div class="list">
+            {{ range .Results }}
+              <a class="item-link" href="/artifacts/{{ .ID }}">
+                <div class="item">
+                  <div class="row">
+                    <div>
+                      <p><strong>{{ if .Title }}{{ .Title }}{{ else }}Untitled artifact{{ end }}</strong></p>
+                      <p class="meta">
+                        <span class="pill">{{ .Type }}</span>
+                        &middot; {{ .ID }}
+                        {{ if .EventAt.Valid }}&middot; {{ .EventAt.String }}{{ end }}
+                      </p>
+                    </div>
+                  </div>
+                  {{ if .Snippet }}<p class="meta">{{ .Snippet }}</p>{{ end }}
+                </div>
+              </a>
+            {{ else }}
+              <p class="empty">No matches for "{{ $query }}".</p>
+            {{ end }}
+          </div>
+        </section>
+      {{ else if not .Query }}
+        <p class="subtitle">Enter a query above to search the archive.</p>
+      {{ end }}
+    </main>
+  </body>
+</html>

@@ -27,7 +27,7 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.LLM.BaseURL != "http://127.0.0.1:11434" {
 		t.Fatalf("LLM.BaseURL = %q", cfg.LLM.BaseURL)
 	}
-	if cfg.LLM.Model != "qwen3.5:9b-q4_K_M" {
+	if cfg.LLM.Model != "gemma4:e2b-it-q4_K_M" {
 		t.Fatalf("LLM.Model = %q", cfg.LLM.Model)
 	}
 	if cfg.LLM.ContextTokens != 16384 {

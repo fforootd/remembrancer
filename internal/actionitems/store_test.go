@@ -16,7 +16,7 @@ func TestRepositoryPersistsRunItemsAndArtifactLinks(t *testing.T) {
 		PeriodStart:     start,
 		PeriodEnd:       end,
 		SourceQueryJSON: `{"candidate_ids":["art_form"]}`,
-		ModelName:       "qwen3.5:9b-q4_K_M",
+		ModelName:       "gemma4:e2b-it-q4_K_M",
 		PromptVersion:   PromptVersion,
 		Items: []ValidatedItem{{
 			Category:     "needs_action",

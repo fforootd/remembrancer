@@ -117,7 +117,7 @@ func Default() Config {
 			Enabled:         false,
 			Provider:        "ollama",
 			BaseURL:         "http://127.0.0.1:11434",
-			Model:           "qwen3.5:9b-q4_K_M",
+			Model:           "gemma4:e2b-it-q4_K_M",
 			Timeout:         2 * time.Minute,
 			ContextTokens:   16384,
 			MaxOutputTokens: 2048,

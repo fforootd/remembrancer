@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 )
 
 type Artifact struct {
@@ -83,6 +84,36 @@ type ChunkSummary struct {
 	MetadataJSON sql.NullString
 }
 
+type BlobInfo struct {
+	Hash        string
+	Algorithm   string
+	SizeBytes   int64
+	MIMEType    sql.NullString
+	StoragePath string
+	Title       string
+	Type        string
+}
+
+func GetBlob(ctx context.Context, db *sql.DB, artifactID string) (BlobInfo, bool, error) {
+	row := db.QueryRowContext(ctx, `
+SELECT b.hash, b.algorithm, b.size_bytes, b.mime_type, b.storage_path,
+	COALESCE(a.title, ''), a.type
+FROM artifact a
+JOIN blob b ON b.hash = a.content_hash
+WHERE a.id = ? AND a.deleted_at IS NULL
+`, artifactID)
+
+	var info BlobInfo
+	err := row.Scan(&info.Hash, &info.Algorithm, &info.SizeBytes, &info.MIMEType, &info.StoragePath, &info.Title, &info.Type)
+	if err == sql.ErrNoRows {
+		return BlobInfo{}, false, nil
+	}
+	if err != nil {
+		return BlobInfo{}, false, fmt.Errorf("get blob for artifact: %w", err)
+	}
+	return info, true, nil
+}
+
 func GetDetail(ctx context.Context, db *sql.DB, id string) (ArtifactDetail, bool, error) {
 	row := db.QueryRowContext(ctx, `
 SELECT a.id, a.type, COALESCE(a.title, ''), a.source, a.source_id, a.owner,
@@ -158,6 +189,69 @@ ORDER BY ordinal
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate chunks: %w", err)
+	}
+	return out, nil
+}
+
+type ListOptions struct {
+	Type  string
+	Since string
+	Limit int
+}
+
+func List(ctx context.Context, db *sql.DB, opts ListOptions) ([]Artifact, error) {
+	limit := opts.Limit
+	if limit < 1 {
+		limit = 50
+	}
+	if limit > 200 {
+		limit = 200
+	}
+
+	args := []any{}
+	where := []string{"a.deleted_at IS NULL"}
+	if opts.Type != "" && opts.Type != "all" {
+		where = append(where, "a.type = ?")
+		args = append(args, opts.Type)
+	}
+	if opts.Since != "" {
+		where = append(where, "(a.event_at >= ? OR a.created_at >= ?)")
+		args = append(args, opts.Since, opts.Since)
+	}
+	args = append(args, limit)
+
+	q := `
+SELECT a.id, a.type, COALESCE(a.title, ''), a.event_at, a.created_at,
+	e.artifact_id IS NOT NULL AS has_text,
+	substr(e.text, 1, 180) AS text_preview,
+	COALESCE(cc.chunk_count, 0) AS chunk_count
+FROM artifact a
+LEFT JOIN extracted_text e ON e.artifact_id = a.id
+LEFT JOIN (
+	SELECT artifact_id, COUNT(*) AS chunk_count
+	FROM artifact_chunk
+	GROUP BY artifact_id
+) cc ON cc.artifact_id = a.id
+WHERE ` + strings.Join(where, " AND ") + `
+ORDER BY a.created_at DESC
+LIMIT ?`
+
+	rows, err := db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query artifacts: %w", err)
+	}
+	defer rows.Close()
+
+	var out []Artifact
+	for rows.Next() {
+		var a Artifact
+		if err := rows.Scan(&a.ID, &a.Type, &a.Title, &a.EventAt, &a.CreatedAt, &a.HasText, &a.TextPreview, &a.ChunkCount); err != nil {
+			return nil, fmt.Errorf("scan artifact: %w", err)
+		}
+		out = append(out, a)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate artifacts: %w", err)
 	}
 	return out, nil
 }

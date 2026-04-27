@@ -29,6 +29,25 @@
         </div>
       </section>
 
+      {{ if eq .Artifact.Type "image" }}
+        <section class="section">
+          <h3>Preview</h3>
+          <div class="panel">
+            <img src="/artifacts/{{ .Artifact.ID }}/raw" alt="{{ .Artifact.Title }}" loading="lazy" class="preview-image">
+          </div>
+        </section>
+      {{ else if eq .Artifact.Type "pdf" }}
+        <section class="section">
+          <h3>Preview</h3>
+          <div class="panel">
+            <object data="/artifacts/{{ .Artifact.ID }}/raw" type="application/pdf" class="preview-pdf">
+              <p>Inline PDF preview is not available in this browser.
+                <a href="/artifacts/{{ .Artifact.ID }}/raw">Open the original PDF</a>.</p>
+            </object>
+          </div>
+        </section>
+      {{ end }}
+
       <section class="section">
         <h3>Timestamps</h3>
         <div class="panel">
@@ -102,7 +121,18 @@
         </div>
       </section>
 
-      {{ if .MarkdownPreview }}
+      {{ if .MarkdownIsRenderable }}
+        <section class="section">
+          <h3>Rendered</h3>
+          <div class="panel">
+            {{ renderMarkdown .Artifact.Markdown.String }}
+            <details class="expand">
+              <summary>Show source ({{ .Artifact.MarkdownChars }} chars)</summary>
+              <pre class="code">{{ .Artifact.Markdown.String }}</pre>
+            </details>
+          </div>
+        </section>
+      {{ else if .MarkdownPreview }}
         <section class="section">
           <h3>Markdown</h3>
           <div class="panel">
@@ -133,9 +163,16 @@
       <section class="section">
         <h3>Chunks ({{ len .Artifact.Chunks }})</h3>
         {{ if .Artifact.Chunks }}
+          {{ if gt (len .Artifact.Chunks) 1 }}
+            <nav class="toc" aria-label="Chunk navigation">
+              {{ range .Artifact.Chunks }}
+                <a href="#chunk-{{ .Ordinal }}">#{{ .Ordinal }}{{ if .HeadingPath.Valid }} · {{ .HeadingPath.String }}{{ end }}</a>
+              {{ end }}
+            </nav>
+          {{ end }}
           <div class="list">
             {{ range .Artifact.Chunks }}
-              <details class="expand">
+              <details class="expand" id="chunk-{{ .Ordinal }}">
                 <summary>
                   #{{ .Ordinal }}
                   {{ if .HeadingPath.Valid }} · {{ .HeadingPath.String }}{{ end }}

@@ -10,6 +10,9 @@ import (
 	"html/template"
 	"log/slog"
 	"net/http"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 
 	"zora/internal/actionitems"
@@ -43,8 +46,9 @@ func WithActionItemReasoner(reasoner actionitems.Reasoner) Option {
 
 func New(cfg config.Config, database *sql.DB, logger *slog.Logger, ingestService *ingest.Service, options ...Option) (*Server, error) {
 	templates, err := template.New("zora").Funcs(template.FuncMap{
-		"humanBytes": humanBytes,
-		"prettyJSON": prettyJSON,
+		"humanBytes":     humanBytes,
+		"prettyJSON":     prettyJSON,
+		"renderMarkdown": renderMarkdown,
 	}).ParseFS(templateFS, "templates/*.html")
 	if err != nil {
 		return nil, err
@@ -90,7 +94,10 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /action-items", s.actionItems)
 	s.mux.HandleFunc("POST /action-items", s.generateActionItems)
 	s.mux.HandleFunc("GET /briefings/{id}", s.briefing)
+	s.mux.HandleFunc("GET /search", s.search)
+	s.mux.HandleFunc("GET /artifacts", s.artifactList)
 	s.mux.HandleFunc("GET /artifacts/{id}", s.artifact)
+	s.mux.HandleFunc("GET /artifacts/{id}/raw", s.artifactRaw)
 	s.mux.HandleFunc("GET /jobs/{id}", s.jobDetail)
 }
 
@@ -163,6 +170,7 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 
 	data := indexData{
 		AppName:          "Zora",
+		Nav:              navFor(r.URL.Path),
 		UserName:         s.cfg.User.DisplayName,
 		RuntimePath:      s.cfg.Paths.Runtime,
 		ArchivePath:      s.cfg.Paths.Archive,
@@ -247,14 +255,7 @@ func (s *Server) scanIngest(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) actionItems(w http.ResponseWriter, r *http.Request) {
 	start, end := defaultActionItemPeriod(time.Now().UTC())
-	data := actionItemsData{
-		AppName:         "Zora",
-		UserName:        s.cfg.User.DisplayName,
-		LLMEnabled:      s.cfg.LLM.Enabled,
-		LLMModel:        s.cfg.LLM.Model,
-		PeriodStartDate: start.Format("2006-01-02"),
-		PeriodEndDate:   end.Format("2006-01-02"),
-	}
+	data := s.newActionItemsData(r.Context(), r.URL.Path, start, end)
 	s.render(w, "action_items.html", data)
 }
 
@@ -277,21 +278,18 @@ func (s *Server) generateActionItems(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !s.cfg.LLM.Enabled {
-		data := actionItemsData{
-			AppName:         "Zora",
-			UserName:        s.cfg.User.DisplayName,
-			LLMEnabled:      false,
-			LLMModel:        s.cfg.LLM.Model,
-			PeriodStartDate: start.Format("2006-01-02"),
-			PeriodEndDate:   end.Format("2006-01-02"),
-			Candidates:      candidates,
-			Previewed:       true,
-		}
+		data := s.newActionItemsData(r.Context(), r.URL.Path, start, end)
+		data.Candidates = candidates
+		data.Previewed = true
 		s.render(w, "action_items.html", data)
 		return
 	}
 	if s.reasoner == nil {
-		http.Error(w, "LLM is enabled but no reasoner is configured", http.StatusServiceUnavailable)
+		data := s.newActionItemsData(r.Context(), r.URL.Path, start, end)
+		data.Candidates = candidates
+		data.Previewed = true
+		data.ErrorMessage = "LLM is enabled but no reasoner is configured."
+		s.renderStatus(w, "action_items.html", http.StatusServiceUnavailable, data)
 		return
 	}
 
@@ -303,7 +301,11 @@ func (s *Server) generateActionItems(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		s.logger.Error("generate action items", "error", err)
-		http.Error(w, "generate action items", http.StatusBadGateway)
+		data := s.newActionItemsData(r.Context(), r.URL.Path, start, end)
+		data.Candidates = candidates
+		data.Previewed = true
+		data.ErrorMessage = fmt.Sprintf("Generation failed: %v", err)
+		s.renderStatus(w, "action_items.html", http.StatusBadGateway, data)
 		return
 	}
 	validated := actionitems.ValidateGenerated(generated, candidates)
@@ -329,6 +331,26 @@ func (s *Server) generateActionItems(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/briefings/"+run.ID, http.StatusSeeOther)
 }
 
+func (s *Server) newActionItemsData(ctx context.Context, path string, start, end time.Time) actionItemsData {
+	data := actionItemsData{
+		AppName:         "Zora",
+		Nav:             navFor(path),
+		UserName:        s.cfg.User.DisplayName,
+		LLMEnabled:      s.cfg.LLM.Enabled,
+		LLMModel:        s.cfg.LLM.Model,
+		PeriodStartDate: start.Format("2006-01-02"),
+		PeriodEndDate:   end.Format("2006-01-02"),
+	}
+	recentRuns, err := actionitems.Repository{DB: s.database}.RecentRuns(ctx, 8)
+	if err != nil {
+		s.logger.Error("read recent action item runs", "error", err)
+		data.ErrorMessage = "Recent action item runs could not be loaded."
+		return data
+	}
+	data.RecentRuns = recentRuns
+	return data
+}
+
 func (s *Server) briefing(w http.ResponseWriter, r *http.Request) {
 	run, ok, err := actionitems.Repository{DB: s.database}.GetRun(r.Context(), r.PathValue("id"))
 	if err != nil {
@@ -342,6 +364,7 @@ func (s *Server) briefing(w http.ResponseWriter, r *http.Request) {
 	}
 	s.render(w, "briefing.html", briefingData{
 		AppName: "Zora",
+		Nav:     navFor(r.URL.Path),
 		Run:     run,
 	})
 }
@@ -366,18 +389,214 @@ func (s *Server) artifact(w http.ResponseWriter, r *http.Request) {
 	const previewMax = 4096
 	mdPreview, mdTrunc := previewString(detail.Markdown, previewMax)
 	txtPreview, txtTrunc := previewString(detail.Text, previewMax)
+	renderable := detail.Type == "text" &&
+		isMarkdownArtifact(detail) &&
+		detail.Markdown.Valid &&
+		detail.Markdown.String != ""
 
 	s.render(w, "artifact.html", artifactData{
-		AppName:           "Zora",
-		Artifact:          detail,
-		Warnings:          parseStringList(detail.WarningsJSON),
-		Errors:            parseStringList(detail.ErrorsJSON),
-		MarkdownPreview:   mdPreview,
-		MarkdownTruncated: mdTrunc,
-		TextPreview:       txtPreview,
-		TextTruncated:     txtTrunc,
-		DocStatusClass:    statusClass(detail.DocStatus.String),
+		AppName:              "Zora",
+		Nav:                  navFor(r.URL.Path),
+		Artifact:             detail,
+		Warnings:             parseStringList(detail.WarningsJSON),
+		Errors:               parseStringList(detail.ErrorsJSON),
+		MarkdownPreview:      mdPreview,
+		MarkdownTruncated:    mdTrunc,
+		MarkdownIsRenderable: renderable,
+		TextPreview:          txtPreview,
+		TextTruncated:        txtTrunc,
+		DocStatusClass:       statusClass(detail.DocStatus.String),
 	})
+}
+
+func (s *Server) search(w http.ResponseWriter, r *http.Request) {
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	typeFilter := r.URL.Query().Get("type")
+
+	data := searchData{
+		AppName: "Zora",
+		Nav:     navFor(r.URL.Path),
+		Query:   query,
+		Type:    typeFilter,
+		Types:   []string{"all", "pdf", "image", "text", "email"},
+	}
+
+	if query == "" {
+		s.render(w, "search.html", data)
+		return
+	}
+
+	fts := ftsQuery(query)
+	results, err := artifacts.Search(r.Context(), s.database, fts, 50)
+	if err != nil {
+		s.logger.Error("search artifacts", "query", query, "error", err)
+		data.ErrorMessage = "Search failed. Try simplifying the query."
+		s.render(w, "search.html", data)
+		return
+	}
+
+	if typeFilter != "" && typeFilter != "all" {
+		filtered := results[:0]
+		for _, r := range results {
+			if r.Type == typeFilter {
+				filtered = append(filtered, r)
+			}
+		}
+		results = filtered
+	}
+	data.Results = results
+	data.HasResults = true
+	s.render(w, "search.html", data)
+}
+
+func ftsQuery(raw string) string {
+	fields := strings.Fields(raw)
+	if len(fields) == 0 {
+		return ""
+	}
+	for i, f := range fields {
+		f = strings.ReplaceAll(f, `"`, "")
+		fields[i] = `"` + f + `"`
+	}
+	return strings.Join(fields, " ")
+}
+
+func (s *Server) artifactList(w http.ResponseWriter, r *http.Request) {
+	typeFilter := r.URL.Query().Get("type")
+	since := strings.TrimSpace(r.URL.Query().Get("since"))
+	limitStr := r.URL.Query().Get("limit")
+	limit := 50
+	if limitStr != "" {
+		if v, err := strconv.Atoi(limitStr); err == nil && v > 0 {
+			limit = v
+		}
+	}
+
+	data := artifactListData{
+		AppName: "Zora",
+		Nav:     navFor(r.URL.Path),
+		Type:    typeFilter,
+		Types:   []string{"all", "pdf", "image", "text", "email"},
+		Since:   since,
+		Limit:   limit,
+	}
+
+	items, err := artifacts.List(r.Context(), s.database, artifacts.ListOptions{
+		Type:  typeFilter,
+		Since: since,
+		Limit: limit,
+	})
+	if err != nil {
+		s.logger.Error("list artifacts", "error", err)
+		data.ErrorMessage = "Could not load artifacts."
+		s.render(w, "artifacts.html", data)
+		return
+	}
+	data.Items = items
+	s.render(w, "artifacts.html", data)
+}
+
+func (s *Server) artifactRaw(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		http.NotFound(w, r)
+		return
+	}
+	info, ok, err := artifacts.GetBlob(r.Context(), s.database, id)
+	if err != nil {
+		s.logger.Error("read artifact blob", "id", id, "error", err)
+		http.Error(w, "read artifact", http.StatusInternalServerError)
+		return
+	}
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+
+	archiveRoot, err := filepath.Abs(s.cfg.Paths.Archive)
+	if err != nil {
+		s.logger.Error("resolve archive root", "error", err)
+		http.Error(w, "resolve archive", http.StatusInternalServerError)
+		return
+	}
+	storagePath, err := filepath.Abs(info.StoragePath)
+	if err != nil {
+		s.logger.Error("resolve blob path", "error", err)
+		http.Error(w, "resolve blob path", http.StatusInternalServerError)
+		return
+	}
+	if !strings.HasPrefix(storagePath, archiveRoot+string(filepath.Separator)) && storagePath != archiveRoot {
+		s.logger.Error("blob path escapes archive root", "blob", storagePath, "archive", archiveRoot)
+		http.Error(w, "invalid blob path", http.StatusInternalServerError)
+		return
+	}
+
+	mime := "application/octet-stream"
+	if info.MIMEType.Valid && info.MIMEType.String != "" {
+		mime = info.MIMEType.String
+	}
+	w.Header().Set("Content-Type", mime)
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`inline; filename=%q`, sanitizeFilename(info.Title, info.Type)))
+	w.Header().Set("Cache-Control", "private, max-age=0, must-revalidate")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	http.ServeFile(w, r, storagePath)
+}
+
+func isMarkdownArtifact(d artifacts.ArtifactDetail) bool {
+	if strings.HasSuffix(strings.ToLower(d.Title), ".md") {
+		return true
+	}
+	if !d.MetadataJSON.Valid || d.MetadataJSON.String == "" {
+		return false
+	}
+	var meta struct {
+		OriginalPath string `json:"original_path"`
+		MIMEType     string `json:"mime_type"`
+	}
+	if err := json.Unmarshal([]byte(d.MetadataJSON.String), &meta); err != nil {
+		return false
+	}
+	if strings.HasSuffix(strings.ToLower(meta.OriginalPath), ".md") {
+		return true
+	}
+	if strings.HasPrefix(strings.ToLower(meta.MIMEType), "text/markdown") {
+		return true
+	}
+	return false
+}
+
+func sanitizeFilename(title, artifactType string) string {
+	if title == "" {
+		title = "artifact"
+	}
+	out := make([]rune, 0, len(title))
+	for _, r := range title {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+			out = append(out, r)
+		case r == '-', r == '_', r == '.', r == ' ':
+			out = append(out, r)
+		default:
+			out = append(out, '_')
+		}
+	}
+	name := strings.TrimSpace(string(out))
+	if name == "" {
+		name = "artifact"
+	}
+	if !strings.Contains(name, ".") {
+		switch artifactType {
+		case "pdf":
+			name += ".pdf"
+		case "image":
+			name += ".bin"
+		case "text":
+			name += ".txt"
+		case "email":
+			name += ".eml"
+		}
+	}
+	return name
 }
 
 func (s *Server) jobDetail(w http.ResponseWriter, r *http.Request) {
@@ -400,6 +619,7 @@ func (s *Server) jobDetail(w http.ResponseWriter, r *http.Request) {
 
 	data := jobData{
 		AppName: "Zora",
+		Nav:     navFor(r.URL.Path),
 		Job:     job,
 	}
 
@@ -526,8 +746,37 @@ func errorString(err error) string {
 	return err.Error()
 }
 
+type navState struct {
+	Home      bool
+	Search    bool
+	Artifacts bool
+	Briefings bool
+}
+
+func navFor(path string) navState {
+	switch {
+	case path == "/":
+		return navState{Home: true}
+	case path == "/search" || strings.HasPrefix(path, "/search/"):
+		return navState{Search: true}
+	case path == "/artifacts" || strings.HasPrefix(path, "/artifacts/"):
+		return navState{Artifacts: true}
+	case path == "/action-items" || strings.HasPrefix(path, "/briefings/"):
+		return navState{Briefings: true}
+	default:
+		return navState{}
+	}
+}
+
 func (s *Server) render(w http.ResponseWriter, name string, data any) {
+	s.renderStatus(w, name, http.StatusOK, data)
+}
+
+func (s *Server) renderStatus(w http.ResponseWriter, name string, status int, data any) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if status != http.StatusOK {
+		w.WriteHeader(status)
+	}
 	if err := s.templates.ExecuteTemplate(w, name, data); err != nil {
 		s.logger.Error("render template", "template", name, "error", err)
 	}
@@ -555,6 +804,7 @@ func defaultActionItemPeriod(now time.Time) (time.Time, time.Time) {
 
 type indexData struct {
 	AppName          string
+	Nav              navState
 	UserName         string
 	RuntimePath      string
 	ArchivePath      string
@@ -596,6 +846,7 @@ type chunkStats struct {
 
 type actionItemsData struct {
 	AppName         string
+	Nav             navState
 	UserName        string
 	LLMEnabled      bool
 	LLMModel        string
@@ -603,27 +854,55 @@ type actionItemsData struct {
 	PeriodEndDate   string
 	Candidates      []actionitems.Candidate
 	Previewed       bool
+	ErrorMessage    string
+	RecentRuns      []actionitems.RunSummary
 }
 
 type briefingData struct {
 	AppName string
+	Nav     navState
 	Run     actionitems.Run
 }
 
 type artifactData struct {
-	AppName           string
-	Artifact          artifacts.ArtifactDetail
-	Warnings          []string
-	Errors            []string
-	MarkdownPreview   string
-	MarkdownTruncated bool
-	TextPreview       string
-	TextTruncated     bool
-	DocStatusClass    string
+	AppName              string
+	Nav                  navState
+	Artifact             artifacts.ArtifactDetail
+	Warnings             []string
+	Errors               []string
+	MarkdownPreview      string
+	MarkdownTruncated    bool
+	MarkdownIsRenderable bool
+	TextPreview          string
+	TextTruncated        bool
+	DocStatusClass       string
+}
+
+type searchData struct {
+	AppName      string
+	Nav          navState
+	Query        string
+	Type         string
+	Types        []string
+	Results      []artifacts.SearchResult
+	HasResults   bool
+	ErrorMessage string
+}
+
+type artifactListData struct {
+	AppName      string
+	Nav          navState
+	Type         string
+	Types        []string
+	Since        string
+	Limit        int
+	Items        []artifacts.Artifact
+	ErrorMessage string
 }
 
 type jobData struct {
 	AppName            string
+	Nav                navState
 	Job                jobs.Job
 	Payload            ingest.FilePayload
 	HasPayload         bool

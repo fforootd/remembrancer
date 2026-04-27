@@ -6,7 +6,7 @@ DOCLING_VENV="${DOCLING_VENV:-$ROOT/.local/docling}"
 ZORA_URL="${ZORA_URL:-http://127.0.0.1:8787/healthz}"
 DOCLING_URL="${DOCLING_URL:-http://127.0.0.1:5001/docs}"
 OLLAMA_URL="${OLLAMA_URL:-http://127.0.0.1:11434/api/tags}"
-ZORA_LLM_MODEL="${ZORA_LLM_MODEL:-qwen3.5:9b-q4_K_M}"
+ZORA_LLM_MODEL="${ZORA_LLM_MODEL:-gemma4:e2b-it-q4_K_M}"
 
 status=0
 strict=0
