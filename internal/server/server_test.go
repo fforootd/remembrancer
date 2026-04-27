@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"database/sql"
 	"io"
 	"log/slog"
 	"net/http"
@@ -9,7 +10,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"zora/internal/actionitems"
 	"zora/internal/config"
 	"zora/internal/db"
 )
@@ -44,11 +47,85 @@ func TestIndexIncludesAppName(t *testing.T) {
 	}
 }
 
+func TestActionItemsPreviewWhenLLMDisabled(t *testing.T) {
+	handler, database := newTestServerWithConfig(t, config.Default())
+	start := time.Date(2026, 4, 20, 0, 0, 0, 0, time.UTC)
+	insertServerArtifact(t, database, "art_school", "pdf", "School form", start.Add(24*time.Hour), "Please return the school form by Friday.")
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/action-items", strings.NewReader("period_start=2026-04-20&period_end=2026-04-27"))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), "Candidate Preview") || !strings.Contains(recorder.Body.String(), "School form") {
+		t.Fatalf("body = %s", recorder.Body.String())
+	}
+	var count int
+	if err := database.QueryRow(`SELECT COUNT(*) FROM briefing`).Scan(&count); err != nil {
+		t.Fatalf("count briefings: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("briefing count = %d", count)
+	}
+}
+
+func TestActionItemsGenerateWithFakeReasoner(t *testing.T) {
+	cfg := config.Default()
+	cfg.LLM.Enabled = true
+	handler, database := newTestServerWithConfig(t, cfg, WithActionItemReasoner(fakeReasoner{
+		response: actionitems.GeneratedResponse{Items: []actionitems.GeneratedItem{{
+			Category:    "needs_action",
+			Title:       "Return school form",
+			Summary:     "A school form needs to be returned.",
+			ActionText:  "Return the school form.",
+			ArtifactIDs: []string{"art_school"},
+			EvidenceSnippets: []actionitems.EvidenceSnippet{{
+				ArtifactID: "art_school",
+				Quote:      "Please return the school form by Friday.",
+			}},
+			Confidence: 0.8,
+		}}},
+	}))
+	start := time.Date(2026, 4, 20, 0, 0, 0, 0, time.UTC)
+	insertServerArtifact(t, database, "art_school", "pdf", "School form", start.Add(24*time.Hour), "Please return the school form by Friday.")
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/action-items", strings.NewReader("period_start=2026-04-20&period_end=2026-04-27"))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())
+	}
+	location := recorder.Header().Get("Location")
+	if !strings.HasPrefix(location, "/briefings/") {
+		t.Fatalf("Location = %q", location)
+	}
+
+	recorder = httptest.NewRecorder()
+	request = httptest.NewRequest(http.MethodGet, location, nil)
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("briefing status = %d body = %s", recorder.Code, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), "Return school form") || !strings.Contains(recorder.Body.String(), "art_school") {
+		t.Fatalf("briefing body = %s", recorder.Body.String())
+	}
+}
+
 func newTestServer(t *testing.T) http.Handler {
+	t.Helper()
+	server, _ := newTestServerWithConfig(t, config.Default())
+	return server
+}
+
+func newTestServerWithConfig(t *testing.T, cfg config.Config, options ...Option) (*Server, *sql.DB) {
 	t.Helper()
 
 	root := t.TempDir()
-	cfg := config.Default()
 	cfg.Paths.Runtime = filepath.Join(root, "runtime")
 	cfg.Paths.Archive = filepath.Join(root, "archive")
 	cfg.Paths.Inbox = filepath.Join(root, "inbox")
@@ -68,9 +145,67 @@ func newTestServer(t *testing.T) http.Handler {
 		t.Fatalf("Migrate: %v", err)
 	}
 
-	handler, err := New(cfg, database, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
+	handler, err := New(cfg, database, slog.New(slog.NewTextHandler(io.Discard, nil)), nil, options...)
 	if err != nil {
 		t.Fatalf("New server: %v", err)
 	}
-	return handler
+	return handler, database
+}
+
+type fakeReasoner struct {
+	response actionitems.GeneratedResponse
+	err      error
+}
+
+func (f fakeReasoner) ExtractActionItems(ctx context.Context, req actionitems.Request) (actionitems.GeneratedResponse, error) {
+	return f.response, f.err
+}
+
+func insertServerArtifact(t *testing.T, database *sql.DB, id, artifactType, title string, eventAt time.Time, text string) {
+	t.Helper()
+	hash := "hash_" + id
+	if _, err := database.Exec(`
+INSERT INTO blob (hash, algorithm, size_bytes, storage_path, created_at)
+VALUES (?, 'sha256', 3, '/tmp/blob', '2026-04-20T00:00:00Z')
+`, hash); err != nil {
+		t.Fatalf("insert server blob: %v", err)
+	}
+	if _, err := database.Exec(`
+INSERT INTO artifact (id, type, source, source_id, title, owner, content_hash, captured_at, event_at, created_at)
+VALUES (?, ?, 'watch_folder', ?, ?, 'florian', ?, ?, ?, ?)
+`,
+		id,
+		artifactType,
+		"source_"+id,
+		title,
+		hash,
+		eventAt.UTC().Format(time.RFC3339Nano),
+		eventAt.UTC().Format(time.RFC3339Nano),
+		eventAt.UTC().Format(time.RFC3339Nano),
+	); err != nil {
+		t.Fatalf("insert server artifact: %v", err)
+	}
+	if _, err := database.Exec(`
+INSERT INTO extracted_text (artifact_id, text, extractor, created_at)
+VALUES (?, ?, 'test', ?)
+`,
+		id,
+		text,
+		eventAt.UTC().Format(time.RFC3339Nano),
+	); err != nil {
+		t.Fatalf("insert server extracted text: %v", err)
+	}
+	if _, err := database.Exec(`
+INSERT INTO artifact_chunk (id, artifact_id, ordinal, title, text, char_start, char_end, created_at)
+VALUES (?, ?, 0, ?, ?, 0, ?, ?)
+`,
+		"chk_"+id,
+		id,
+		title,
+		text,
+		len(text),
+		eventAt.UTC().Format(time.RFC3339Nano),
+	); err != nil {
+		t.Fatalf("insert server artifact: %v", err)
+	}
 }

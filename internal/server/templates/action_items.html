@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Action Items · {{ .AppName }}</title>
+    <style>{{ template "styles" . }}</style>
+  </head>
+  <body>
+    {{ template "topbar" . }}
+    <main>
+      <a class="back" href="/">Back to dashboard</a>
+      <h2>Action Items</h2>
+      <p class="subtitle">{{ if .LLMEnabled }}Generate source-linked action items with {{ .LLMModel }}.{{ else }}LLM is disabled; this page previews deterministic candidates only.{{ end }}</p>
+
+      <section class="section" aria-label="Action item generator">
+        <div class="panel">
+          <form class="inline-form" method="post" action="/action-items">
+            <label class="field">
+              <span class="label">Start</span>
+              <input type="date" name="period_start" value="{{ .PeriodStartDate }}" required>
+            </label>
+            <label class="field">
+              <span class="label">End</span>
+              <input type="date" name="period_end" value="{{ .PeriodEndDate }}" required>
+            </label>
+            <button class="button" type="submit">{{ if .LLMEnabled }}Generate{{ else }}Preview candidates{{ end }}</button>
+          </form>
+        </div>
+      </section>
+
+      {{ if .Previewed }}
+        <section class="section" aria-label="Candidate preview">
+          <h2>Candidate Preview</h2>
+          <div class="list">
+            {{ range .Candidates }}
+              <a class="item-link" href="/artifacts/{{ .ArtifactID }}">
+                <div class="item">
+                  <div class="row">
+                    <div>
+                      <p><strong>{{ .Title }}</strong></p>
+                      <p class="meta">{{ .Type }} &middot; {{ .ArtifactID }} &middot; score {{ .Score }}{{ if .EventAt }} &middot; {{ .EventAt }}{{ end }}</p>
+                    </div>
+                  </div>
+                  <div class="counts">
+                    {{ range .Signals }}<span class="pill">{{ . }}</span>{{ end }}
+                  </div>
+                  {{ if .Evidence }}<p class="meta">{{ .Evidence }}</p>{{ end }}
+                </div>
+              </a>
+            {{ else }}
+              <p class="empty">No candidates found for this period.</p>
+            {{ end }}
+          </div>
+        </section>
+      {{ end }}
+    </main>
+  </body>
+</html>

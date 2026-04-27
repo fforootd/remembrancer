@@ -29,6 +29,14 @@ if ! command -v uv >/dev/null 2>&1; then
 	python3 -m pipx install uv
 fi
 
+if ! command -v ollama >/dev/null 2>&1; then
+	if [ "${ZORA_SKIP_OLLAMA_SETUP:-0}" = "1" ]; then
+		echo "Skipping Ollama install because ZORA_SKIP_OLLAMA_SETUP=1."
+	else
+		curl -fsSL https://ollama.com/install.sh | sh
+	fi
+fi
+
 if ! getent group zora >/dev/null; then
 	sudo groupadd --system zora
 fi
@@ -69,6 +77,9 @@ fi
 
 cat <<'MSG'
 Zora Ubuntu setup is ready.
+
+Optional: pull the default local LLM for action item generation:
+  make llm-pull
 
 Start services when ready:
   sudo systemctl enable --now docling-serve

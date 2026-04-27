@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ .Artifact.Title }} · {{ .AppName }}</title>
+    <style>{{ template "styles" . }}</style>
+  </head>
+  <body>
+    {{ template "topbar" . }}
+
+    <main>
+      <a class="back" href="/">← Home</a>
+
+      <section class="section">
+        <div class="row">
+          <div>
+            <h2>{{ if .Artifact.Title }}{{ .Artifact.Title }}{{ else }}Untitled artifact{{ end }}</h2>
+            <p class="meta">
+              <span class="pill">{{ .Artifact.Type }}</span>
+              <span class="pill">{{ .Artifact.Source }}</span>
+              {{ if .Artifact.HasDocument }}<span class="pill {{ .DocStatusClass }}">{{ .Artifact.DocStatus.String }}</span>{{ end }}
+            </p>
+            <p class="value" style="margin-top:8px">{{ .Artifact.ID }}</p>
+          </div>
+          {{ if .Artifact.LastEnqueuedJobID.Valid }}
+            <a class="button" href="/jobs/{{ .Artifact.LastEnqueuedJobID.String }}">View job →</a>
+          {{ end }}
+        </div>
+      </section>
+
+      <section class="section">
+        <h3>Timestamps</h3>
+        <div class="panel">
+          <dl class="props">
+            <dt>Captured at</dt><dd>{{ .Artifact.CapturedAt }}</dd>
+            <dt>Event at</dt><dd>{{ if .Artifact.EventAt.Valid }}{{ .Artifact.EventAt.String }}{{ else }}<span class="empty">none</span>{{ end }}</dd>
+            <dt>Created at</dt><dd>{{ .Artifact.CreatedAt }}</dd>
+          </dl>
+        </div>
+      </section>
+
+      <section class="section">
+        <h3>Provenance</h3>
+        <div class="panel">
+          <dl class="props">
+            {{ if .Artifact.WatchPath.Valid }}<dt>Source path</dt><dd>{{ .Artifact.WatchPath.String }}</dd>{{ end }}
+            <dt>Source</dt><dd>{{ .Artifact.Source }}</dd>
+            {{ if .Artifact.SourceID.Valid }}<dt>Source ID</dt><dd>{{ .Artifact.SourceID.String }}</dd>{{ end }}
+            <dt>Owner</dt><dd>{{ .Artifact.Owner }}</dd>
+            <dt>Content hash</dt><dd>{{ .Artifact.BlobAlgorithm }}:{{ .Artifact.BlobHash }}</dd>
+            <dt>Blob size</dt><dd>{{ .Artifact.BlobSizeBytes | humanBytes }} ({{ .Artifact.BlobSizeBytes }} B)</dd>
+            <dt>MIME</dt><dd>{{ if .Artifact.BlobMIMEType.Valid }}{{ .Artifact.BlobMIMEType.String }}{{ else }}<span class="empty">unknown</span>{{ end }}</dd>
+            <dt>Storage path</dt><dd>{{ .Artifact.BlobStoragePath }}</dd>
+          </dl>
+          {{ if .Artifact.MetadataJSON.Valid }}
+            <details class="expand">
+              <summary>Artifact metadata JSON</summary>
+              <pre class="code">{{ .Artifact.MetadataJSON.String | prettyJSON }}</pre>
+            </details>
+          {{ end }}
+        </div>
+      </section>
+
+      <section class="section">
+        <h3>Extraction</h3>
+        <div class="panel">
+          {{ if .Artifact.HasDocument }}
+            <dl class="props">
+              <dt>Status</dt><dd><span class="pill {{ .DocStatusClass }}">{{ .Artifact.DocStatus.String }}</span></dd>
+              <dt>Extractor</dt><dd>{{ .Artifact.DocExtractor.String }}{{ if .Artifact.DocExtractorVer.Valid }} · {{ .Artifact.DocExtractorVer.String }}{{ end }}</dd>
+              <dt>Processing time</dt><dd>{{ if .Artifact.DocProcessingTimeMS.Valid }}{{ .Artifact.DocProcessingTimeMS.Int64 }} ms{{ else }}<span class="empty">unknown</span>{{ end }}</dd>
+              <dt>Markdown</dt><dd>{{ .Artifact.MarkdownChars }} chars</dd>
+              <dt>Plain text</dt><dd>{{ .Artifact.TextChars }} chars</dd>
+              <dt>Chunks</dt><dd>{{ len .Artifact.Chunks }}</dd>
+            </dl>
+            {{ if .Warnings }}
+              <div class="kv-list" style="margin-top:12px">
+                {{ range .Warnings }}<span class="pill warn">⚠ {{ . }}</span>{{ end }}
+              </div>
+            {{ end }}
+            {{ if .Errors }}
+              <div class="kv-list" style="margin-top:8px">
+                {{ range .Errors }}<span class="pill failed">✕ {{ . }}</span>{{ end }}
+              </div>
+            {{ end }}
+            {{ if .Artifact.DocMetadataJSON.Valid }}
+              <details class="expand">
+                <summary>Extraction metadata JSON</summary>
+                <pre class="code">{{ .Artifact.DocMetadataJSON.String | prettyJSON }}</pre>
+              </details>
+            {{ end }}
+          {{ else if .Artifact.HasText }}
+            <dl class="props">
+              <dt>Extractor</dt><dd>{{ if .Artifact.TextExtractor.Valid }}{{ .Artifact.TextExtractor.String }}{{ else }}<span class="empty">unknown</span>{{ end }}{{ if .Artifact.TextExtractorVer.Valid }} · {{ .Artifact.TextExtractorVer.String }}{{ end }}</dd>
+              <dt>Plain text</dt><dd>{{ .Artifact.TextChars }} chars</dd>
+              <dt>Chunks</dt><dd>{{ len .Artifact.Chunks }}</dd>
+            </dl>
+          {{ else }}
+            <p class="empty">No extracted text yet.</p>
+          {{ end }}
+        </div>
+      </section>
+
+      {{ if .MarkdownPreview }}
+        <section class="section">
+          <h3>Markdown</h3>
+          <div class="panel">
+            <pre class="code">{{ .MarkdownPreview }}</pre>
+            {{ if .MarkdownTruncated }}
+              <details class="expand">
+                <summary>Show full markdown ({{ .Artifact.MarkdownChars }} chars)</summary>
+                <pre class="code">{{ .Artifact.Markdown.String }}</pre>
+              </details>
+            {{ end }}
+          </div>
+        </section>
+      {{ else if .Artifact.HasText }}
+        <section class="section">
+          <h3>Extracted text</h3>
+          <div class="panel">
+            <pre class="code">{{ .TextPreview }}</pre>
+            {{ if .TextTruncated }}
+              <details class="expand">
+                <summary>Show full text ({{ .Artifact.TextChars }} chars)</summary>
+                <pre class="code">{{ .Artifact.Text.String }}</pre>
+              </details>
+            {{ end }}
+          </div>
+        </section>
+      {{ end }}
+
+      <section class="section">
+        <h3>Chunks ({{ len .Artifact.Chunks }})</h3>
+        {{ if .Artifact.Chunks }}
+          <div class="list">
+            {{ range .Artifact.Chunks }}
+              <details class="expand">
+                <summary>
+                  #{{ .Ordinal }}
+                  {{ if .HeadingPath.Valid }} · {{ .HeadingPath.String }}{{ end }}
+                  {{ if .Title.Valid }} · {{ .Title.String }}{{ end }}
+                  · chars {{ .CharStart }}–{{ .CharEnd }}
+                  · {{ .TextChars }} chars
+                </summary>
+                <pre class="code">{{ .Text }}</pre>
+              </details>
+            {{ end }}
+          </div>
+        {{ else }}
+          <p class="empty">No chunks recorded.</p>
+        {{ end }}
+      </section>
+    </main>
+  </body>
+</html>

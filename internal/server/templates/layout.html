@@ -1,0 +1,299 @@
+{{ define "styles" }}
+:root {
+  color-scheme: light;
+  --bg: #f7f7f4;
+  --ink: #202124;
+  --muted: #62656a;
+  --line: #d9d9d2;
+  --panel: #ffffff;
+  --accent: #1f6f63;
+  --warn: #b08400;
+  --error: #9b1c1c;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.5;
+}
+
+header {
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+
+main, .topbar {
+  width: min(960px, calc(100vw - 32px));
+  margin: 0 auto;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 0;
+}
+
+h1, h2, h3, p { margin: 0; }
+h1 { font-size: 1.25rem; font-weight: 700; }
+h2 { font-size: 1.05rem; font-weight: 700; margin-top: 0; }
+h3 { font-size: 0.95rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+
+.subtitle { color: var(--muted); font-size: 0.95rem; }
+
+main { padding: 36px 0 56px; }
+
+.status {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  margin-top: 24px;
+}
+
+.section { margin-top: 34px; }
+
+.panel {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 16px;
+}
+
+.panel + .panel { margin-top: 12px; }
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.row + .row { margin-top: 10px; }
+
+.label {
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+}
+
+.value {
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9rem;
+}
+
+.ready { color: var(--accent); font-weight: 700; }
+
+.button {
+  appearance: none;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--accent);
+  color: white;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  padding: 9px 13px;
+}
+
+.button:disabled {
+  border-color: var(--line);
+  background: var(--line);
+  color: var(--muted);
+  cursor: default;
+}
+
+.list { display: grid; gap: 10px; margin-top: 14px; }
+
+.item {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 13px 14px;
+}
+
+.item-link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+.item-link:hover .item, .item-link:focus-visible .item {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.source-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.source-row {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.meta { color: var(--muted); font-size: 0.85rem; }
+.error { color: var(--error); }
+.warn  { color: var(--warn); }
+
+.counts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+
+.pill {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 0.82rem;
+  background: var(--panel);
+}
+
+.pill.succeeded { border-color: var(--accent); color: var(--accent); }
+.pill.failed, .pill.dead { border-color: var(--error); color: var(--error); }
+.pill.running { border-color: var(--accent); color: var(--accent); background: #e8f1ef; }
+.pill.queued  { border-color: var(--muted); color: var(--muted); }
+.pill.cancelled { border-color: var(--muted); color: var(--muted); }
+.pill.warn { border-color: var(--warn); color: var(--warn); }
+.pill.verified { border-color: var(--accent); color: var(--accent); }
+.pill.unverified { border-color: var(--warn); color: var(--warn); }
+
+.inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.field {
+  display: grid;
+  gap: 4px;
+}
+
+input {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: inherit;
+  padding: 8px 10px;
+}
+
+.props {
+  display: grid;
+  grid-template-columns: minmax(140px, max-content) 1fr;
+  gap: 6px 16px;
+  margin: 0;
+}
+
+.props dt {
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  align-self: center;
+}
+
+.props dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9rem;
+}
+
+a { color: var(--accent); }
+a.back {
+  display: inline-block;
+  margin-bottom: 12px;
+  text-decoration: none;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+a.back:hover { color: var(--accent); }
+
+pre.code {
+  margin: 10px 0 0;
+  padding: 12px;
+  background: #fafaf6;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  max-height: 480px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+details.expand {
+  margin-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+}
+
+details.expand[open] { background: #fafaf6; }
+
+details.expand > summary {
+  cursor: pointer;
+  padding: 9px 12px;
+  font-size: 0.88rem;
+  color: var(--muted);
+  list-style: none;
+}
+
+details.expand > summary::-webkit-details-marker { display: none; }
+details.expand > summary::before {
+  content: "▸ ";
+  display: inline-block;
+  width: 14px;
+  color: var(--muted);
+}
+details.expand[open] > summary::before { content: "▾ "; }
+
+details.expand > div, details.expand > pre {
+  padding: 0 12px 12px;
+}
+
+details.expand > pre.code {
+  margin: 0 12px 12px;
+  border: none;
+  background: transparent;
+  padding: 0;
+  max-height: none;
+}
+
+.kv-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.kv-list .pill {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.empty {
+  color: var(--muted);
+  font-style: italic;
+  font-size: 0.9rem;
+}
+{{ end }}
+
+{{ define "topbar" }}
+<header>
+  <div class="topbar">
+    <div>
+      <h1>{{ .AppName }}</h1>
+      <p class="subtitle">Local-first personal evidence archive</p>
+    </div>
+    <p class="ready">Milestone 0</p>
+  </div>
+</header>
+{{ end }}

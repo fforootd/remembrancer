@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ .Run.Title }} · {{ .AppName }}</title>
+    <style>{{ template "styles" . }}</style>
+  </head>
+  <body>
+    {{ template "topbar" . }}
+    <main>
+      <a class="back" href="/">Back to dashboard</a>
+      <h2>{{ .Run.Title }}</h2>
+      <p class="subtitle">{{ .Run.ModelName }} &middot; {{ .Run.PromptVersion }} &middot; {{ .Run.CreatedAt }}</p>
+
+      <section class="section" aria-label="Action item results">
+        <div class="list">
+          {{ range .Run.Items }}
+            <div class="item">
+              <div class="row">
+                <div>
+                  <p><strong>{{ .Title }}</strong></p>
+                  <p class="meta">{{ .Category }} &middot; <span class="pill {{ .SourceStatus }}">{{ .SourceStatus }}</span>{{ if .DueAt }} &middot; due {{ .DueAt }}{{ end }}{{ if .Confidence.Valid }} &middot; confidence {{ .Confidence.Float64 }}{{ end }}</p>
+                </div>
+              </div>
+              <p>{{ .Summary }}</p>
+              {{ if .WhyItMatters }}<p class="meta">{{ .WhyItMatters }}</p>{{ end }}
+              {{ if .ActionText }}<p class="value">{{ .ActionText }}</p>{{ end }}
+              <div class="source-list">
+                {{ range .Artifacts }}
+                  <a class="item-link" href="/artifacts/{{ .ID }}">
+                    <div class="source-row">
+                      <p><strong>{{ .Title }}</strong></p>
+                      <p class="meta">{{ .Type }} &middot; {{ .ID }}</p>
+                      {{ if .Snippet }}<p class="meta">{{ .Snippet }}</p>{{ end }}
+                    </div>
+                  </a>
+                {{ end }}
+              </div>
+            </div>
+          {{ else }}
+            <p class="empty">No source-linked action items were produced for this period.</p>
+          {{ end }}
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

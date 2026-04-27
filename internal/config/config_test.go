@@ -21,6 +21,18 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.LLM.Enabled {
 		t.Fatal("LLM should be disabled by default")
 	}
+	if cfg.LLM.Provider != "ollama" {
+		t.Fatalf("LLM.Provider = %q", cfg.LLM.Provider)
+	}
+	if cfg.LLM.BaseURL != "http://127.0.0.1:11434" {
+		t.Fatalf("LLM.BaseURL = %q", cfg.LLM.BaseURL)
+	}
+	if cfg.LLM.Model != "qwen3.5:9b-q4_K_M" {
+		t.Fatalf("LLM.Model = %q", cfg.LLM.Model)
+	}
+	if cfg.LLM.ContextTokens != 16384 {
+		t.Fatalf("LLM.ContextTokens = %d", cfg.LLM.ContextTokens)
+	}
 	if cfg.Extract.Provider != "docling" {
 		t.Fatalf("Extract.Provider = %q", cfg.Extract.Provider)
 	}
@@ -65,8 +77,13 @@ extract:
     image_export_mode: "placeholder"
 llm:
   enabled: true
-  base_url: "http://127.0.0.1:11434/v1"
-  model: "gemma"
+  provider: "ollama"
+  base_url: "http://127.0.0.1:11434"
+  model: "gemma4:e4b"
+  timeout: "30s"
+  context_tokens: 8192
+  max_output_tokens: 1024
+  temperature: 0.2
 `)
 	if err := os.WriteFile(path, data, 0o644); err != nil {
 		t.Fatalf("write config fixture: %v", err)
@@ -85,6 +102,18 @@ llm:
 	}
 	if !cfg.LLM.Enabled {
 		t.Fatal("LLM should be enabled by explicit config")
+	}
+	if cfg.LLM.Model != "gemma4:e4b" {
+		t.Fatalf("LLM.Model = %q", cfg.LLM.Model)
+	}
+	if cfg.LLM.Timeout.String() != "30s" {
+		t.Fatalf("LLM.Timeout = %s", cfg.LLM.Timeout)
+	}
+	if cfg.LLM.ContextTokens != 8192 || cfg.LLM.MaxOutputTokens != 1024 {
+		t.Fatalf("LLM token settings = %d/%d", cfg.LLM.ContextTokens, cfg.LLM.MaxOutputTokens)
+	}
+	if cfg.LLM.Temperature != 0.2 {
+		t.Fatalf("LLM.Temperature = %f", cfg.LLM.Temperature)
 	}
 	if cfg.Ingest.Workers != 4 {
 		t.Fatalf("Ingest.Workers = %d", cfg.Ingest.Workers)

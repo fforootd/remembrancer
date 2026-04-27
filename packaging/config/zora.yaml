@@ -34,5 +34,10 @@ extract:
 
 llm:
   enabled: false
-  base_url: "http://127.0.0.1:11434/v1"
-  model: ""
+  provider: "ollama"
+  base_url: "http://127.0.0.1:11434"
+  model: "qwen3.5:9b-q4_K_M"
+  timeout: "2m"
+  context_tokens: 16384
+  max_output_tokens: 2048
+  temperature: 0.1

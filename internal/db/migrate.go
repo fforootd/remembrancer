@@ -218,6 +218,53 @@ CREATE TRIGGER artifact_chunk_au AFTER UPDATE ON artifact_chunk BEGIN
 END;
 `,
 	},
+	{
+		Version: 4,
+		Name:    "briefing action items",
+		SQL: `
+CREATE TABLE briefing (
+	id TEXT PRIMARY KEY,
+	period_start TEXT NOT NULL,
+	period_end TEXT NOT NULL,
+	title TEXT NOT NULL,
+	source_query_json TEXT NOT NULL,
+	model_name TEXT,
+	prompt_version TEXT,
+	created_at TEXT NOT NULL
+);
+
+CREATE INDEX briefing_created_at_idx
+ON briefing(created_at DESC);
+
+CREATE TABLE briefing_item (
+	id TEXT PRIMARY KEY,
+	briefing_id TEXT NOT NULL,
+	category TEXT NOT NULL,
+	title TEXT NOT NULL,
+	summary TEXT NOT NULL,
+	why_it_matters TEXT,
+	action_text TEXT,
+	due_at TEXT,
+	confidence REAL,
+	source_status TEXT NOT NULL CHECK (source_status IN ('verified', 'unverified')),
+	sort_order INTEGER NOT NULL,
+	created_at TEXT NOT NULL,
+	FOREIGN KEY (briefing_id) REFERENCES briefing(id) ON DELETE CASCADE
+);
+
+CREATE INDEX briefing_item_briefing_idx
+ON briefing_item(briefing_id, sort_order);
+
+CREATE TABLE briefing_item_artifact (
+	briefing_item_id TEXT NOT NULL,
+	artifact_id TEXT NOT NULL,
+	snippet TEXT,
+	PRIMARY KEY (briefing_item_id, artifact_id),
+	FOREIGN KEY (briefing_item_id) REFERENCES briefing_item(id) ON DELETE CASCADE,
+	FOREIGN KEY (artifact_id) REFERENCES artifact(id)
+);
+`,
+	},
 }
 
 func Migrate(ctx context.Context, database *sql.DB) error {

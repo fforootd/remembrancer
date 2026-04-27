@@ -31,9 +31,9 @@ uv pip install --python "$DOCLING_VENV/bin/python" "docling-serve[ui]"
 cat <<MSG
 Zora macOS development setup is ready.
 
-Run Docling:
-  $ROOT/scripts/run-docling-dev.sh
+Optional: pull the default local LLM for action item generation:
+  make llm-pull
 
-Run Zora:
-  $ROOT/scripts/run-zora-dev.sh
+Run the local development stack:
+  make dev
 MSG

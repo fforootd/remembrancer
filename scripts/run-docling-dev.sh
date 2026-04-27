@@ -2,6 +2,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+DOCLING_HOST="${DOCLING_HOST:-127.0.0.1}"
+DOCLING_PORT="${DOCLING_PORT:-5001}"
 
 if [ -z "${DOCLING_VENV:-}" ]; then
 	if [ -x "$ROOT/.local/docling/bin/docling-serve" ]; then
@@ -18,4 +20,4 @@ if [ ! -x "$DOCLING_VENV/bin/docling-serve" ]; then
 	exit 1
 fi
 
-exec "$DOCLING_VENV/bin/docling-serve" run --host 127.0.0.1 --port 5001 --enable-ui
+exec "$DOCLING_VENV/bin/docling-serve" run --host "$DOCLING_HOST" --port "$DOCLING_PORT" --enable-ui

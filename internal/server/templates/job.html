@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ .Job.Kind }} · {{ .AppName }}</title>
+    <style>{{ template "styles" . }}</style>
+  </head>
+  <body>
+    {{ template "topbar" . }}
+
+    <main>
+      <a class="back" href="/">← Home</a>
+
+      <section class="section">
+        <div class="row">
+          <div>
+            <h2>{{ .Job.Kind }}</h2>
+            <p class="meta">
+              <span class="pill {{ .Job.Status }}">{{ .Job.Status }}</span>
+              <span class="pill">attempts {{ .Job.Attempts }}/{{ .Job.MaxAttempts }}</span>
+              {{ if .Job.Priority }}<span class="pill">priority {{ .Job.Priority }}</span>{{ end }}
+            </p>
+            <p class="value" style="margin-top:8px">{{ .Job.ID }}</p>
+          </div>
+          {{ if .ArtifactExists }}
+            <a class="button" href="/artifacts/{{ .ArtifactID }}">View artifact →</a>
+          {{ end }}
+        </div>
+      </section>
+
+      {{ if .Job.LastError.Valid }}
+        <section class="section">
+          <h3>Last error</h3>
+          <div class="panel">
+            <pre class="code error">{{ .Job.LastError.String }}</pre>
+          </div>
+        </section>
+      {{ end }}
+
+      <section class="section">
+        <h3>Audit</h3>
+        <div class="panel">
+          <dl class="props">
+            <dt>Created at</dt><dd>{{ .Job.CreatedAt }}</dd>
+            <dt>Updated at</dt><dd>{{ .Job.UpdatedAt }}</dd>
+            <dt>Run after</dt><dd>{{ .Job.RunAfter }}</dd>
+            <dt>Finished at</dt><dd>{{ if .Job.FinishedAt.Valid }}{{ .Job.FinishedAt.String }}{{ else }}<span class="empty">not finished</span>{{ end }}</dd>
+            <dt>Locked by</dt><dd>{{ if .Job.LockedBy.Valid }}{{ .Job.LockedBy.String }}{{ if .Job.LockedAt.Valid }} (since {{ .Job.LockedAt.String }}){{ end }}{{ else }}<span class="empty">not held</span>{{ end }}</dd>
+            <dt>Dedupe key</dt><dd>{{ if .Job.DedupeKey.Valid }}{{ .Job.DedupeKey.String }}{{ else }}<span class="empty">none</span>{{ end }}</dd>
+          </dl>
+        </div>
+      </section>
+
+      {{ if .HasPayload }}
+        <section class="section">
+          <h3>Payload</h3>
+          <div class="panel">
+            <dl class="props">
+              <dt>Path</dt><dd>{{ .Payload.Path }}</dd>
+              <dt>Type</dt><dd>{{ .Payload.Type }}</dd>
+              <dt>MIME</dt><dd>{{ .Payload.MIMEType }}</dd>
+              <dt>Size</dt><dd>{{ .Payload.SizeBytes | humanBytes }} ({{ .Payload.SizeBytes }} B)</dd>
+              <dt>mtime</dt><dd>{{ .Payload.MTime }}</dd>
+              <dt>Title</dt><dd>{{ .Payload.Title }}</dd>
+              <dt>Content hash</dt><dd>{{ .Payload.ContentHash }}</dd>
+              <dt>Source ID</dt><dd>{{ .Payload.SourceID }}</dd>
+              <dt>Artifact ID</dt><dd>
+                {{ if .ArtifactExists }}
+                  <a href="/artifacts/{{ .ArtifactID }}">{{ .ArtifactID }}</a>
+                {{ else }}
+                  {{ .ArtifactID }} <span class="meta">(not yet persisted)</span>
+                {{ end }}
+              </dd>
+            </dl>
+          </div>
+        </section>
+      {{ end }}
+
+      {{ if .HasResult }}
+        <section class="section">
+          <h3>Result</h3>
+          <div class="panel">
+            <dl class="props">
+              <dt>Artifact</dt><dd>
+                {{ if .Result.ArtifactID }}
+                  <a href="/artifacts/{{ .Result.ArtifactID }}">{{ .Result.ArtifactID }}</a>
+                {{ else }}<span class="empty">none</span>{{ end }}
+              </dd>
+              <dt>Content hash</dt><dd>{{ .Result.ContentHash }}</dd>
+              <dt>Extractor</dt><dd>{{ .Result.Extractor }}</dd>
+              <dt>Docling status</dt><dd><span class="pill {{ .ResultDoclingClass }}">{{ .Result.DoclingStatus }}</span></dd>
+              <dt>Processing time</dt><dd>{{ .Result.ProcessingTimeMS }} ms</dd>
+              <dt>Plain text</dt><dd>{{ .Result.TextChars }} chars</dd>
+              <dt>Markdown</dt><dd>{{ .Result.MarkdownChars }} chars</dd>
+              <dt>Chunks</dt><dd>{{ .Result.ChunkCount }}</dd>
+            </dl>
+          </div>
+        </section>
+      {{ end }}
+
+      <section class="section">
+        <h3>Raw JSON</h3>
+        <details class="expand">
+          <summary>Payload JSON</summary>
+          <pre class="code">{{ .Job.PayloadJSON | prettyJSON }}</pre>
+        </details>
+        {{ if .Job.ResultJSON.Valid }}
+          <details class="expand">
+            <summary>Result JSON</summary>
+            <pre class="code">{{ .Job.ResultJSON.String | prettyJSON }}</pre>
+          </details>
+        {{ end }}
+      </section>
+    </main>
+  </body>
+</html>

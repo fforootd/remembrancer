@@ -40,46 +40,58 @@ Zora is intended to run as a native local service. The Go binary stays CGO-free,
 Docling runs out-of-process in a Python virtual environment, and SQLite/files live
 on the host filesystem.
 
+For the full local workflow, see `docs/local-dev.md`.
+
 On macOS:
 
 ```sh
-scripts/bootstrap-macos.sh
+make setup-macos
 ```
 
 On Ubuntu:
 
 ```sh
-scripts/bootstrap-ubuntu.sh
+make setup-ubuntu
 ```
 
-The macOS bootstrap uses `Brewfile`. The Ubuntu bootstrap uses `apt` for host
-packages and installs `docling-serve[ui]` into `/opt/zora/docling`.
+The macOS bootstrap uses `Brewfile`, including Ollama. The Ubuntu bootstrap uses
+`apt` for host packages, installs Ollama unless `ZORA_SKIP_OLLAMA_SETUP=1`, and
+installs `docling-serve[ui]` into `/opt/zora/docling`.
 
 ## Run Locally
 
+Optionally pull the default local model before generating action items:
+
 ```sh
-scripts/run-docling-dev.sh
-scripts/run-zora-dev.sh
+make llm-pull
+```
+
+```sh
+make dev
 ```
 
 Then open:
 
 - `http://127.0.0.1:8787/`
 - `http://127.0.0.1:8787/healthz`
+- `http://127.0.0.1:8787/action-items`
 - `http://127.0.0.1:5001/docs`
 - `http://127.0.0.1:5001/ui`
 
 The example config writes local development state under `.local/`, which is
 ignored by git.
 
+For separate service logs, run `make run-docling`, `make run-ollama`, and
+`make run-zora` in separate terminals.
+
 ## Package
 
 GoReleaser builds local release artifacts:
 
 ```sh
-CGO_ENABLED=0 go test ./...
-goreleaser check
-goreleaser release --snapshot --clean
+make test
+make package-check
+make package-snapshot
 ```
 
 Snapshot output is written to `dist/`, including macOS/Linux tarballs,
@@ -96,13 +108,13 @@ bootstrap before starting `docling-serve.service`.
 Check build metadata with:
 
 ```sh
-zora version
+make version
 ```
 
 ## Test
 
 ```sh
-CGO_ENABLED=0 go test ./...
+make test
 ```
 
 ## License

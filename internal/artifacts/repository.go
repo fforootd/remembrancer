@@ -25,6 +25,143 @@ type SearchResult struct {
 	Snippet string
 }
 
+type ArtifactDetail struct {
+	ID           string
+	Type         string
+	Title        string
+	Source       string
+	SourceID     sql.NullString
+	Owner        string
+	CapturedAt   string
+	EventAt      sql.NullString
+	CreatedAt    string
+	MetadataJSON sql.NullString
+
+	BlobHash        string
+	BlobAlgorithm   string
+	BlobSizeBytes   int64
+	BlobMIMEType    sql.NullString
+	BlobStoragePath string
+
+	HasText          bool
+	TextExtractor    sql.NullString
+	TextExtractorVer sql.NullString
+	TextChars        int
+	Text             sql.NullString
+	TextCreatedAt    sql.NullString
+
+	HasDocument         bool
+	DocStatus           sql.NullString
+	DocExtractor        sql.NullString
+	DocExtractorVer     sql.NullString
+	DocProcessingTimeMS sql.NullInt64
+	MarkdownChars       int
+	Markdown            sql.NullString
+	StructuredJSON      sql.NullString
+	DocMetadataJSON     sql.NullString
+	WarningsJSON        sql.NullString
+	ErrorsJSON          sql.NullString
+	DocCreatedAt        sql.NullString
+
+	WatchPath         sql.NullString
+	LastEnqueuedJobID sql.NullString
+
+	Chunks []ChunkSummary
+}
+
+type ChunkSummary struct {
+	ID           string
+	Ordinal      int
+	Title        sql.NullString
+	HeadingPath  sql.NullString
+	PageStart    sql.NullInt64
+	PageEnd      sql.NullInt64
+	CharStart    int
+	CharEnd      int
+	TextChars    int
+	Text         string
+	MetadataJSON sql.NullString
+}
+
+func GetDetail(ctx context.Context, db *sql.DB, id string) (ArtifactDetail, bool, error) {
+	row := db.QueryRowContext(ctx, `
+SELECT a.id, a.type, COALESCE(a.title, ''), a.source, a.source_id, a.owner,
+	a.captured_at, a.event_at, a.created_at, a.metadata_json,
+	b.hash, b.algorithm, b.size_bytes, b.mime_type, b.storage_path,
+	e.artifact_id IS NOT NULL AS has_text,
+	e.extractor, e.extractor_version,
+	COALESCE(length(e.text), 0) AS text_chars,
+	e.text, e.created_at,
+	d.artifact_id IS NOT NULL AS has_document,
+	d.status, d.extractor, d.extractor_version, d.processing_time_ms,
+	COALESCE(length(d.markdown), 0) AS markdown_chars,
+	d.markdown, d.structured_json, d.metadata_json,
+	d.warnings_json, d.errors_json, d.created_at,
+	w.path, w.last_enqueued_job_id
+FROM artifact a
+JOIN blob b ON b.hash = a.content_hash
+LEFT JOIN extracted_text e ON e.artifact_id = a.id
+LEFT JOIN extracted_document d ON d.artifact_id = a.id
+LEFT JOIN watch_file_state w ON w.source_id = a.source_id
+WHERE a.id = ? AND a.deleted_at IS NULL
+`, id)
+
+	var d ArtifactDetail
+	err := row.Scan(
+		&d.ID, &d.Type, &d.Title, &d.Source, &d.SourceID, &d.Owner,
+		&d.CapturedAt, &d.EventAt, &d.CreatedAt, &d.MetadataJSON,
+		&d.BlobHash, &d.BlobAlgorithm, &d.BlobSizeBytes, &d.BlobMIMEType, &d.BlobStoragePath,
+		&d.HasText, &d.TextExtractor, &d.TextExtractorVer, &d.TextChars, &d.Text, &d.TextCreatedAt,
+		&d.HasDocument, &d.DocStatus, &d.DocExtractor, &d.DocExtractorVer, &d.DocProcessingTimeMS,
+		&d.MarkdownChars, &d.Markdown, &d.StructuredJSON, &d.DocMetadataJSON,
+		&d.WarningsJSON, &d.ErrorsJSON, &d.DocCreatedAt,
+		&d.WatchPath, &d.LastEnqueuedJobID,
+	)
+	if err == sql.ErrNoRows {
+		return ArtifactDetail{}, false, nil
+	}
+	if err != nil {
+		return ArtifactDetail{}, false, fmt.Errorf("get artifact: %w", err)
+	}
+
+	chunks, err := getChunks(ctx, db, id)
+	if err != nil {
+		return ArtifactDetail{}, false, err
+	}
+	d.Chunks = chunks
+	return d, true, nil
+}
+
+func getChunks(ctx context.Context, db *sql.DB, artifactID string) ([]ChunkSummary, error) {
+	rows, err := db.QueryContext(ctx, `
+SELECT id, ordinal, title, heading_path, page_start, page_end,
+	char_start, char_end, COALESCE(length(text), 0), text, metadata_json
+FROM artifact_chunk
+WHERE artifact_id = ?
+ORDER BY ordinal
+`, artifactID)
+	if err != nil {
+		return nil, fmt.Errorf("query chunks: %w", err)
+	}
+	defer rows.Close()
+
+	var out []ChunkSummary
+	for rows.Next() {
+		var c ChunkSummary
+		if err := rows.Scan(
+			&c.ID, &c.Ordinal, &c.Title, &c.HeadingPath, &c.PageStart, &c.PageEnd,
+			&c.CharStart, &c.CharEnd, &c.TextChars, &c.Text, &c.MetadataJSON,
+		); err != nil {
+			return nil, fmt.Errorf("scan chunk: %w", err)
+		}
+		out = append(out, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate chunks: %w", err)
+	}
+	return out, nil
+}
+
 func Recent(ctx context.Context, db *sql.DB, limit int) ([]Artifact, error) {
 	if limit < 1 {
 		limit = 10

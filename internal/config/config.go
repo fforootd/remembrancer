@@ -67,9 +67,14 @@ type DoclingExtractConfig struct {
 }
 
 type LLMConfig struct {
-	Enabled bool   `yaml:"enabled"`
-	BaseURL string `yaml:"base_url"`
-	Model   string `yaml:"model"`
+	Enabled         bool          `yaml:"enabled"`
+	Provider        string        `yaml:"provider"`
+	BaseURL         string        `yaml:"base_url"`
+	Model           string        `yaml:"model"`
+	Timeout         time.Duration `yaml:"timeout"`
+	ContextTokens   int           `yaml:"context_tokens"`
+	MaxOutputTokens int           `yaml:"max_output_tokens"`
+	Temperature     float64       `yaml:"temperature"`
 }
 
 func Default() Config {
@@ -109,9 +114,14 @@ func Default() Config {
 			},
 		},
 		LLM: LLMConfig{
-			Enabled: false,
-			BaseURL: "http://127.0.0.1:11434/v1",
-			Model:   "",
+			Enabled:         false,
+			Provider:        "ollama",
+			BaseURL:         "http://127.0.0.1:11434",
+			Model:           "qwen3.5:9b-q4_K_M",
+			Timeout:         2 * time.Minute,
+			ContextTokens:   16384,
+			MaxOutputTokens: 2048,
+			Temperature:     0.1,
 		},
 	}
 }
@@ -172,8 +182,43 @@ func (cfg Config) Validate() error {
 	if err := cfg.Extract.Validate(); err != nil {
 		return err
 	}
-	if cfg.LLM.Enabled && cfg.LLM.BaseURL == "" {
-		return errors.New("llm.base_url is required when llm.enabled is true")
+	if err := cfg.LLM.Validate(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (cfg LLMConfig) Validate() error {
+	switch cfg.Provider {
+	case "ollama":
+	case "":
+		return errors.New("llm.provider is required")
+	default:
+		return fmt.Errorf("llm.provider must be ollama, got %q", cfg.Provider)
+	}
+	if cfg.Enabled {
+		if cfg.BaseURL == "" {
+			return errors.New("llm.base_url is required when llm.enabled is true")
+		}
+		parsed, err := url.Parse(cfg.BaseURL)
+		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+			return errors.New("llm.base_url must be an absolute URL")
+		}
+		if cfg.Model == "" {
+			return errors.New("llm.model is required when llm.enabled is true")
+		}
+	}
+	if cfg.Timeout <= 0 {
+		return errors.New("llm.timeout must be positive")
+	}
+	if cfg.ContextTokens < 1024 {
+		return errors.New("llm.context_tokens must be at least 1024")
+	}
+	if cfg.MaxOutputTokens < 128 {
+		return errors.New("llm.max_output_tokens must be at least 128")
+	}
+	if cfg.Temperature < 0 {
+		return errors.New("llm.temperature must not be negative")
 	}
 	return nil
 }

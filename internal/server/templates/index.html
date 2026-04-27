@@ -4,182 +4,10 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ .AppName }}</title>
-    <style>
-      :root {
-        color-scheme: light;
-        --bg: #f7f7f4;
-        --ink: #202124;
-        --muted: #62656a;
-        --line: #d9d9d2;
-        --panel: #ffffff;
-        --accent: #1f6f63;
-      }
-
-      * {
-        box-sizing: border-box;
-      }
-
-      body {
-        margin: 0;
-        min-height: 100vh;
-        background: var(--bg);
-        color: var(--ink);
-        font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        line-height: 1.5;
-      }
-
-      header {
-        border-bottom: 1px solid var(--line);
-        background: var(--panel);
-      }
-
-      main,
-      .topbar {
-        width: min(960px, calc(100vw - 32px));
-        margin: 0 auto;
-      }
-
-      .topbar {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 16px;
-        padding: 18px 0;
-      }
-
-      h1,
-      h2,
-      p {
-        margin: 0;
-      }
-
-      h1 {
-        font-size: 1.25rem;
-        font-weight: 700;
-      }
-
-      .subtitle {
-        color: var(--muted);
-        font-size: 0.95rem;
-      }
-
-      main {
-        padding: 36px 0 56px;
-      }
-
-      .status {
-        display: grid;
-        gap: 16px;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-        margin-top: 24px;
-      }
-
-      .section {
-        margin-top: 34px;
-      }
-
-      .panel {
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        background: var(--panel);
-        padding: 16px;
-      }
-
-      .row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 16px;
-      }
-
-      .row + .row {
-        margin-top: 10px;
-      }
-
-      .label {
-        color: var(--muted);
-        font-size: 0.8rem;
-        text-transform: uppercase;
-      }
-
-      .value {
-        margin-top: 4px;
-        overflow-wrap: anywhere;
-        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-        font-size: 0.9rem;
-      }
-
-      .ready {
-        color: var(--accent);
-        font-weight: 700;
-      }
-
-      .button {
-        appearance: none;
-        border: 1px solid var(--accent);
-        border-radius: 8px;
-        background: var(--accent);
-        color: white;
-        cursor: pointer;
-        font: inherit;
-        font-weight: 700;
-        padding: 9px 13px;
-      }
-
-      .button:disabled {
-        border-color: var(--line);
-        background: var(--line);
-        color: var(--muted);
-        cursor: default;
-      }
-
-      .list {
-        display: grid;
-        gap: 10px;
-        margin-top: 14px;
-      }
-
-      .item {
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        background: var(--panel);
-        padding: 13px 14px;
-      }
-
-      .meta {
-        color: var(--muted);
-        font-size: 0.85rem;
-      }
-
-      .error {
-        color: #9b1c1c;
-      }
-
-      .counts {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        margin-top: 10px;
-      }
-
-      .pill {
-        border: 1px solid var(--line);
-        border-radius: 999px;
-        padding: 3px 9px;
-        font-size: 0.82rem;
-      }
-    </style>
+    <style>{{ template "styles" . }}</style>
   </head>
   <body>
-    <header>
-      <div class="topbar">
-        <div>
-          <h1>{{ .AppName }}</h1>
-          <p class="subtitle">Local-first personal evidence archive</p>
-        </div>
-        <p class="ready">Milestone 0</p>
-      </div>
-    </header>
+    {{ template "topbar" . }}
 
     <main>
       <h2>Hello, {{ .UserName }}</h2>
@@ -256,17 +84,52 @@
         <h2>Recent Artifacts</h2>
         <div class="list">
           {{ range .RecentArtifacts }}
-            <div class="item">
-              <div class="row">
-                <div>
-                  <p><strong>{{ .Title }}</strong></p>
-                  <p class="meta">{{ .Type }} &middot; {{ .ID }}{{ if .HasText }} &middot; text ready{{ end }}{{ if .ChunkCount }} &middot; {{ .ChunkCount }} chunks{{ end }}</p>
+            <a class="item-link" href="/artifacts/{{ .ID }}">
+              <div class="item">
+                <div class="row">
+                  <div>
+                    <p><strong>{{ .Title }}</strong></p>
+                    <p class="meta">{{ .Type }} &middot; {{ .ID }}{{ if .HasText }} &middot; text ready{{ end }}{{ if .ChunkCount }} &middot; {{ .ChunkCount }} chunks{{ end }}</p>
+                  </div>
                 </div>
+                {{ if .TextPreview.Valid }}<p class="meta">{{ .TextPreview.String }}</p>{{ end }}
               </div>
-              {{ if .TextPreview.Valid }}<p class="meta">{{ .TextPreview.String }}</p>{{ end }}
-            </div>
+            </a>
           {{ else }}
             <p class="subtitle">No artifacts ingested yet.</p>
+          {{ end }}
+        </div>
+      </section>
+
+      <section class="section" aria-label="Action items">
+        <h2>Action Items</h2>
+        <div class="panel">
+          <p class="label">LLM reasoning</p>
+          <p class="value">{{ if .LLMEnabled }}enabled{{ else }}candidate preview only{{ end }}</p>
+          <p class="meta">{{ .LLMBaseURL }}{{ if .LLMModel }} / {{ .LLMModel }}{{ end }}</p>
+          <form class="inline-form" method="post" action="/action-items">
+            <label class="field">
+              <span class="label">Start</span>
+              <input type="date" name="period_start" required>
+            </label>
+            <label class="field">
+              <span class="label">End</span>
+              <input type="date" name="period_end" required>
+            </label>
+            <button class="button" type="submit">{{ if .LLMEnabled }}Generate{{ else }}Preview candidates{{ end }}</button>
+          </form>
+          <p class="meta"><a href="/action-items">Open action item workspace</a></p>
+        </div>
+        <div class="list">
+          {{ range .RecentActionRuns }}
+            <a class="item-link" href="/briefings/{{ .ID }}">
+              <div class="item">
+                <p><strong>{{ .Title }}</strong></p>
+                <p class="meta">{{ .ItemCount }} items &middot; {{ .ModelName }} &middot; {{ .CreatedAt }}</p>
+              </div>
+            </a>
+          {{ else }}
+            <p class="subtitle">No action item runs yet.</p>
           {{ end }}
         </div>
       </section>
@@ -275,15 +138,17 @@
         <h2>Recent Jobs</h2>
         <div class="list">
           {{ range .RecentJobs }}
-            <div class="item">
-              <div class="row">
-                <div>
-                  <p><strong>{{ .Kind }}</strong></p>
-                  <p class="meta">{{ .ID }} &middot; {{ .Status }} &middot; attempts {{ .Attempts }}/{{ .MaxAttempts }}</p>
+            <a class="item-link" href="/jobs/{{ .ID }}">
+              <div class="item">
+                <div class="row">
+                  <div>
+                    <p><strong>{{ .Kind }}</strong></p>
+                    <p class="meta">{{ .ID }} &middot; <span class="pill {{ .Status }}">{{ .Status }}</span> &middot; attempts {{ .Attempts }}/{{ .MaxAttempts }}</p>
+                  </div>
                 </div>
+                {{ if .LastError.Valid }}<p class="meta error">{{ .LastError.String }}</p>{{ end }}
               </div>
-              {{ if .LastError.Valid }}<p class="meta error">{{ .LastError.String }}</p>{{ end }}
-            </div>
+            </a>
           {{ else }}
             <p class="subtitle">No jobs yet.</p>
           {{ end }}
