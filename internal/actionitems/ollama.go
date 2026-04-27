@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"zora/internal/llm/jsonparse"
 	"zora/internal/llm/prompts"
 )
 
@@ -102,11 +103,43 @@ func (c OllamaClient) ExtractActionItems(ctx context.Context, req Request) (Gene
 		return GeneratedResponse{}, fmt.Errorf("ollama returned empty content")
 	}
 
-	var generated GeneratedResponse
-	if err := json.Unmarshal([]byte(chatResponse.Message.Content), &generated); err != nil {
+	generated, err := decodeGeneratedResponse(chatResponse.Message.Content)
+	if err != nil {
 		return GeneratedResponse{}, fmt.Errorf("decode action item JSON: %w", err)
 	}
 	return generated, nil
+}
+
+// decodeGeneratedResponse accepts the shapes models actually produce: the
+// requested {"items":[...]} object, a bare [...] array, or {<other-key>:[...]}
+// nested under a different but recognisable wrapper key (actions, results,
+// data, …). Anything else surfaces the original object-decode error.
+func decodeGeneratedResponse(content string) (GeneratedResponse, error) {
+	var generated GeneratedResponse
+	objErr := jsonparse.UnmarshalLenient([]byte(content), &generated)
+	if objErr == nil && len(generated.Items) > 0 {
+		return generated, nil
+	}
+	var items []GeneratedItem
+	if arrErr := jsonparse.UnmarshalLenient([]byte(content), &items); arrErr == nil {
+		return GeneratedResponse{Items: items}, nil
+	}
+	var wrapped map[string]json.RawMessage
+	if wrapErr := jsonparse.UnmarshalLenient([]byte(content), &wrapped); wrapErr == nil {
+		for _, key := range []string{"actions", "action_items", "results", "data", "Items"} {
+			raw, ok := wrapped[key]
+			if !ok {
+				continue
+			}
+			if err := json.Unmarshal(raw, &items); err == nil && len(items) > 0 {
+				return GeneratedResponse{Items: items}, nil
+			}
+		}
+	}
+	if objErr == nil {
+		return generated, nil
+	}
+	return GeneratedResponse{}, objErr
 }
 
 func (c OllamaClient) chatRequest(req Request) (ollamaChatRequest, error) {

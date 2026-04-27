@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <title>Threads &middot; {{ .AppName }}</title>
+    {{ template "head" . }}
+  </head>
+  <body>
+    {{ template "topbar" . }}
+    <main>
+      <section class="zora-hero">
+        <p class="zora-eyebrow">Threads</p>
+        <h1>What goes together</h1>
+        <p class="zora-meta">{{ if .TotalCount }}{{ .TotalCount }} active thread{{ if ne .TotalCount 1 }}s{{ end }} across your archive. Each thread groups artifacts that share an entity, event, or obligation.{{ else }}No threads yet. As Zora classifies new artifacts and finds shared entities or dates, threads appear here automatically.{{ end }}</p>
+      </section>
+
+      {{ if .Groups }}
+        {{ range .Groups }}
+          <section class="zora-section" aria-label="{{ humaneThreadKindPlural .Kind }}">
+            <h2>{{ humaneThreadKindPlural .Kind }}</h2>
+            <div class="zora-stack">
+              {{ range .Threads }}
+                <a class="zora-item-link" href="/threads/{{ .ID }}">
+                  <article class="zora-item">
+                    <p class="zora-item-title">{{ .Title }}</p>
+                    <p class="zora-meta">
+                      {{ humaneThreadKind .Kind }}
+                      {{ if or .DateStart .DateEnd }} &middot; {{ humaneDateRange .DateStart .DateEnd }}{{ end }}
+                      &middot; {{ .MemberCount }} item{{ if ne .MemberCount 1 }}s{{ end }}
+                    </p>
+                    {{ if .Summary }}<p class="zora-item-summary">{{ .Summary }}</p>{{ end }}
+                  </article>
+                </a>
+              {{ end }}
+            </div>
+          </section>
+        {{ end }}
+      {{ else }}
+        <section class="zora-section zora-empty" aria-label="No threads yet">
+          <p>Threads form when two or more artifacts share an entity (vendor, person, organization), a strong relation, or close timing. Drop documents into the watch folder, or trigger a briefing to seed the pipeline.</p>
+          <p><a href="/library">Browse library &rarr;</a></p>
+        </section>
+      {{ end }}
+    </main>
+    {{ template "footer" . }}
+  </body>
+</html>

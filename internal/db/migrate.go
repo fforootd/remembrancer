@@ -495,6 +495,88 @@ CREATE INDEX extracted_fact_lookup_idx
 ON extracted_fact(fact_type, text_value);
 `,
 	},
+	{
+		Version: 7,
+		Name:    "threads and cluster pipeline stage",
+		SQL: `
+CREATE TABLE pipeline_stage_new (
+	artifact_id TEXT NOT NULL,
+	stage TEXT NOT NULL CHECK (stage IN (
+		'extract_artifact',
+		'classify_artifact',
+		'extract_fields',
+		'reconcile_artifact',
+		'cluster_threads',
+		'generate_briefing'
+	)),
+	status TEXT NOT NULL CHECK (status IN ('queued', 'running', 'succeeded', 'failed', 'skipped')),
+	input_hash TEXT,
+	attempts INTEGER NOT NULL DEFAULT 0,
+	last_error TEXT,
+	created_at TEXT NOT NULL,
+	updated_at TEXT NOT NULL,
+	finished_at TEXT,
+	PRIMARY KEY (artifact_id, stage),
+	FOREIGN KEY (artifact_id) REFERENCES artifact(id) ON DELETE CASCADE
+);
+
+INSERT INTO pipeline_stage_new (
+	artifact_id, stage, status, input_hash, attempts, last_error,
+	created_at, updated_at, finished_at
+)
+SELECT
+	artifact_id, stage, status, input_hash, attempts, last_error,
+	created_at, updated_at, finished_at
+FROM pipeline_stage;
+
+DROP TABLE pipeline_stage;
+ALTER TABLE pipeline_stage_new RENAME TO pipeline_stage;
+
+CREATE INDEX pipeline_stage_status_idx
+ON pipeline_stage(stage, status, updated_at);
+
+CREATE TABLE thread (
+	id TEXT PRIMARY KEY,
+	kind TEXT NOT NULL CHECK (kind IN (
+		'visit',
+		'contract',
+		'vendor_account',
+		'project',
+		'school_year',
+		'vehicle',
+		'travel',
+		'other'
+	)),
+	title TEXT NOT NULL,
+	summary TEXT,
+	date_start TEXT,
+	date_end TEXT,
+	status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived', 'dismissed')),
+	signature_json TEXT NOT NULL DEFAULT '{}',
+	created_at TEXT NOT NULL,
+	updated_at TEXT NOT NULL
+);
+
+CREATE INDEX thread_status_idx ON thread(status, updated_at DESC);
+CREATE INDEX thread_kind_idx ON thread(kind, updated_at DESC);
+
+CREATE TABLE thread_member (
+	thread_id TEXT NOT NULL,
+	artifact_id TEXT NOT NULL,
+	score REAL NOT NULL,
+	source TEXT NOT NULL CHECK (source IN ('rule', 'llm', 'user')),
+	added_at TEXT NOT NULL,
+	PRIMARY KEY (thread_id, artifact_id),
+	FOREIGN KEY (thread_id) REFERENCES thread(id) ON DELETE CASCADE,
+	FOREIGN KEY (artifact_id) REFERENCES artifact(id) ON DELETE CASCADE
+);
+
+CREATE INDEX thread_member_artifact_idx ON thread_member(artifact_id);
+
+ALTER TABLE briefing_item ADD COLUMN thread_id TEXT REFERENCES thread(id) ON DELETE SET NULL;
+CREATE INDEX briefing_item_thread_idx ON briefing_item(thread_id) WHERE thread_id IS NOT NULL;
+`,
+	},
 }
 
 func Migrate(ctx context.Context, database *sql.DB) error {

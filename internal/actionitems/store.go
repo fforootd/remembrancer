@@ -60,6 +60,9 @@ type RunItem struct {
 	SourceStatus string
 	SortOrder    int
 	CreatedAt    string
+	ThreadID     string
+	ThreadTitle  string
+	ThreadKind   string
 	Artifacts    []RunArtifact
 }
 
@@ -157,6 +160,25 @@ VALUES (?, ?, NULLIF(?, ''))
 		}
 	}
 
+	if _, err := tx.ExecContext(ctx, `
+UPDATE briefing_item AS bi
+SET thread_id = (
+	SELECT tm.thread_id
+	FROM briefing_item_artifact bia
+	JOIN thread_member tm ON tm.artifact_id = bia.artifact_id
+	JOIN thread t ON t.id = tm.thread_id
+	WHERE bia.briefing_item_id = bi.id
+		AND t.status = 'active'
+	GROUP BY tm.thread_id
+	ORDER BY COUNT(*) DESC, MAX(t.updated_at) DESC
+	LIMIT 1
+)
+WHERE bi.briefing_id = ?
+	AND bi.thread_id IS NULL
+`, runID); err != nil {
+		return Run{}, fmt.Errorf("resolve thread_id for briefing items: %w", err)
+	}
+
 	if err := tx.Commit(); err != nil {
 		return Run{}, fmt.Errorf("commit action item run transaction: %w", err)
 	}
@@ -252,12 +274,14 @@ LIMIT ?
 
 func (r Repository) runItems(ctx context.Context, runID string) ([]RunItem, error) {
 	rows, err := r.DB.QueryContext(ctx, `
-SELECT id, category, title, summary, COALESCE(why_it_matters, ''),
-	COALESCE(action_text, ''), COALESCE(due_at, ''), confidence,
-	source_status, sort_order, created_at
-FROM briefing_item
-WHERE briefing_id = ?
-ORDER BY sort_order, created_at
+SELECT i.id, i.category, i.title, i.summary, COALESCE(i.why_it_matters, ''),
+	COALESCE(i.action_text, ''), COALESCE(i.due_at, ''), i.confidence,
+	i.source_status, i.sort_order, i.created_at,
+	COALESCE(i.thread_id, ''), COALESCE(t.title, ''), COALESCE(t.kind, '')
+FROM briefing_item i
+LEFT JOIN thread t ON t.id = i.thread_id
+WHERE i.briefing_id = ?
+ORDER BY i.sort_order, i.created_at
 `, runID)
 	if err != nil {
 		return nil, fmt.Errorf("query action item run items: %w", err)
@@ -279,6 +303,9 @@ ORDER BY sort_order, created_at
 			&item.SourceStatus,
 			&item.SortOrder,
 			&item.CreatedAt,
+			&item.ThreadID,
+			&item.ThreadTitle,
+			&item.ThreadKind,
 		); err != nil {
 			return nil, fmt.Errorf("scan action item run item: %w", err)
 		}

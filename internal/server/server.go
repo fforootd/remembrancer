@@ -47,17 +47,22 @@ func WithActionItemReasoner(reasoner actionitems.Reasoner) Option {
 
 func New(cfg config.Config, database *sql.DB, logger *slog.Logger, ingestService *ingest.Service, options ...Option) (*Server, error) {
 	templates, err := template.New("zora").Funcs(template.FuncMap{
-		"humanBytes":         humanBytes,
-		"prettyJSON":         prettyJSON,
-		"renderMarkdown":     renderMarkdown,
-		"humaneCategory":     humaneCategory,
-		"humaneCategoryRank": humaneCategoryRank,
-		"humaneType":         humaneType,
-		"humaneTypePlural":   humaneTypePlural,
-		"humaneSource":       humaneSource,
-		"humaneDate":         humaneDate,
-		"humaneRelativeDue":  humaneRelativeDue,
-		"dueChipClass":       dueChipClass,
+		"humanBytes":             humanBytes,
+		"prettyJSON":             prettyJSON,
+		"renderMarkdown":         renderMarkdown,
+		"humaneCategory":         humaneCategory,
+		"humaneCategoryRank":     humaneCategoryRank,
+		"humaneType":             humaneType,
+		"humaneTypePlural":       humaneTypePlural,
+		"humaneSource":           humaneSource,
+		"humaneDate":             humaneDate,
+		"humaneRelativeDue":      humaneRelativeDue,
+		"dueChipClass":           dueChipClass,
+		"humaneThreadKind":       humaneThreadKind,
+		"humaneThreadKindPlural": humaneThreadKindPlural,
+		"humaneDateRange":        humaneDateRange,
+		"humaneFactType":         humaneFactType,
+		"humaneRelationLabel":    humaneRelationLabel,
 	}).Parse(`{{ define "styles" }}{{ end }}`)
 	if err == nil {
 		templates, err = templates.ParseFS(templateFS, "templates/*.html")
@@ -113,6 +118,9 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /action-items", s.generateActionItems)
 
 	s.mux.HandleFunc("GET /search", s.search)
+
+	s.mux.HandleFunc("GET /threads", s.threadList)
+	s.mux.HandleFunc("GET /threads/{id}", s.threadDetail)
 
 	s.mux.HandleFunc("GET /library", s.artifactList)
 	s.mux.HandleFunc("GET /library/{id}", s.artifact)
@@ -412,7 +420,46 @@ func (s *Server) briefing(w http.ResponseWriter, r *http.Request) {
 		Nav:        navFor(r.URL.Path),
 		Run:        run,
 		Categories: groupRunItemsByCategory(run.Items),
+		Threads:    threadsFromRunItems(run.Items),
 	})
+}
+
+func threadsFromRunItems(items []actionitems.RunItem) []briefingThreadView {
+	type bucket struct {
+		view  briefingThreadView
+		count int
+	}
+	order := []string{}
+	bag := map[string]*bucket{}
+	for _, item := range items {
+		if item.ThreadID == "" {
+			continue
+		}
+		if b, ok := bag[item.ThreadID]; ok {
+			b.count++
+			b.view.ItemCount = b.count
+			continue
+		}
+		title := item.ThreadTitle
+		if title == "" {
+			title = item.ThreadID
+		}
+		bag[item.ThreadID] = &bucket{
+			view: briefingThreadView{
+				ID:        item.ThreadID,
+				Title:     title,
+				KindLabel: humaneThreadKind(item.ThreadKind),
+				ItemCount: 1,
+			},
+			count: 1,
+		}
+		order = append(order, item.ThreadID)
+	}
+	out := make([]briefingThreadView, 0, len(order))
+	for _, id := range order {
+		out = append(out, bag[id].view)
+	}
+	return out
 }
 
 func (s *Server) artifact(w http.ResponseWriter, r *http.Request) {
@@ -440,6 +487,23 @@ func (s *Server) artifact(w http.ResponseWriter, r *http.Request) {
 		detail.Markdown.Valid &&
 		detail.Markdown.String != ""
 
+	classification, hasClassification, err := loadClassificationView(r.Context(), s.database, id)
+	if err != nil {
+		s.logger.Error("load classification", "artifact_id", id, "error", err)
+	}
+	keyFacts, err := loadKeyFacts(r.Context(), s.database, id)
+	if err != nil {
+		s.logger.Error("load key facts", "artifact_id", id, "error", err)
+	}
+	relations, err := loadRelations(r.Context(), s.database, id)
+	if err != nil {
+		s.logger.Error("load relations", "artifact_id", id, "error", err)
+	}
+	artifactThreads, err := loadThreadLinks(r.Context(), s.database, id)
+	if err != nil {
+		s.logger.Error("load artifact threads", "artifact_id", id, "error", err)
+	}
+
 	s.render(w, "artifact.html", artifactData{
 		AppName:              "Zora",
 		Nav:                  navFor(r.URL.Path),
@@ -452,6 +516,12 @@ func (s *Server) artifact(w http.ResponseWriter, r *http.Request) {
 		TextPreview:          txtPreview,
 		TextTruncated:        txtTrunc,
 		DocStatusClass:       statusClass(detail.DocStatus.String),
+		HasUnderstanding:     hasClassification || len(keyFacts) > 0 || len(relations) > 0 || len(artifactThreads) > 0,
+		Classification:       classification,
+		HasClassification:    hasClassification,
+		KeyFacts:             keyFacts,
+		Relations:            relations,
+		Threads:              artifactThreads,
 	})
 }
 
@@ -538,20 +608,38 @@ func (s *Server) artifactList(w http.ResponseWriter, r *http.Request) {
 		s.render(w, "artifacts.html", data)
 		return
 	}
-	data.Items = items
+
+	ids := make([]string, len(items))
+	for i, item := range items {
+		ids[i] = item.ID
+	}
+	sublines, err := loadFactSublines(r.Context(), s.database, ids)
+	if err != nil {
+		s.logger.Error("load fact sublines", "error", err)
+		sublines = map[string]string{}
+	}
+
+	cards := make([]artifactCardView, 0, len(items))
+	for _, item := range items {
+		cards = append(cards, artifactCardView{
+			Artifact: item,
+			Subline:  sublines[item.ID],
+		})
+	}
+	data.Items = cards
 	if typeFilter == "" || typeFilter == "all" {
-		data.Groups = groupArtifactsByType(items)
+		data.Groups = groupArtifactCardsByType(cards)
 	}
 	s.render(w, "artifacts.html", data)
 }
 
-func groupArtifactsByType(items []artifacts.Artifact) []libraryGroup {
+func groupArtifactCardsByType(items []artifactCardView) []libraryGroup {
 	order := []string{"pdf", "image", "text", "email"}
-	buckets := map[string][]artifacts.Artifact{}
+	buckets := map[string][]artifactCardView{}
 	seen := map[string]bool{}
-	for _, item := range items {
-		buckets[item.Type] = append(buckets[item.Type], item)
-		seen[item.Type] = true
+	for _, card := range items {
+		buckets[card.Artifact.Type] = append(buckets[card.Artifact.Type], card)
+		seen[card.Artifact.Type] = true
 	}
 	out := make([]libraryGroup, 0, len(seen))
 	for _, t := range order {
@@ -822,6 +910,7 @@ type navState struct {
 	Search    bool
 	Artifacts bool
 	Library   bool
+	Threads   bool
 	Briefings bool
 }
 
@@ -831,9 +920,11 @@ func navFor(path string) navState {
 		return navState{Home: true, Today: true}
 	case path == "/search" || strings.HasPrefix(path, "/search/"):
 		return navState{Search: true}
+	case path == "/threads" || strings.HasPrefix(path, "/threads/"):
+		return navState{Threads: true}
 	case path == "/artifacts" || strings.HasPrefix(path, "/artifacts/") || path == "/library" || strings.HasPrefix(path, "/library/"):
 		return navState{Artifacts: true, Library: true}
-	case path == "/action-items" || strings.HasPrefix(path, "/briefings/"):
+	case path == "/action-items" || strings.HasPrefix(path, "/briefings/") || path == "/briefings":
 		return navState{Briefings: true}
 	default:
 		return navState{}
@@ -935,6 +1026,14 @@ type briefingData struct {
 	Nav        navState
 	Run        actionitems.Run
 	Categories []todayCategory
+	Threads    []briefingThreadView
+}
+
+type briefingThreadView struct {
+	ID        string
+	Title     string
+	KindLabel string
+	ItemCount int
 }
 
 type artifactData struct {
@@ -949,6 +1048,12 @@ type artifactData struct {
 	TextPreview          string
 	TextTruncated        bool
 	DocStatusClass       string
+	HasUnderstanding     bool
+	Classification       classificationView
+	HasClassification    bool
+	KeyFacts             []factChip
+	Relations            []relatedArtifactView
+	Threads              []threadLink
 }
 
 type searchData struct {
@@ -969,7 +1074,7 @@ type artifactListData struct {
 	Types        []string
 	Since        string
 	Limit        int
-	Items        []artifacts.Artifact
+	Items        []artifactCardView
 	Groups       []libraryGroup
 	ErrorMessage string
 }
@@ -977,7 +1082,12 @@ type artifactListData struct {
 type libraryGroup struct {
 	Type  string
 	Label string
-	Items []artifacts.Artifact
+	Items []artifactCardView
+}
+
+type artifactCardView struct {
+	Artifact artifacts.Artifact
+	Subline  string
 }
 
 type jobData struct {

@@ -84,6 +84,126 @@ func humaneTypePlural(artifactType string) string {
 	return humaneType(artifactType) + "s"
 }
 
+var humaneThreadKindLabels = map[string]string{
+	"visit":          "Visit",
+	"contract":       "Contract",
+	"vendor_account": "Vendor account",
+	"project":        "Project",
+	"school_year":    "School & family",
+	"vehicle":        "Vehicle",
+	"travel":         "Travel",
+	"other":          "Other",
+}
+
+var humaneThreadKindPluralLabels = map[string]string{
+	"visit":          "Visits",
+	"contract":       "Contracts",
+	"vendor_account": "Vendor accounts",
+	"project":        "Projects",
+	"school_year":    "School & family",
+	"vehicle":        "Vehicles",
+	"travel":         "Travel",
+	"other":          "Other",
+}
+
+func humaneThreadKind(kind string) string {
+	if label, ok := humaneThreadKindLabels[kind]; ok {
+		return label
+	}
+	if kind == "" {
+		return "Other"
+	}
+	return strings.ReplaceAll(strings.ToUpper(kind[:1])+kind[1:], "_", " ")
+}
+
+func humaneThreadKindPlural(kind string) string {
+	if label, ok := humaneThreadKindPluralLabels[kind]; ok {
+		return label
+	}
+	return humaneThreadKind(kind) + "s"
+}
+
+func humaneDateRange(start, end string) string {
+	startTime, hasStart := parseFlexibleTime(start)
+	endTime, hasEnd := parseFlexibleTime(end)
+	switch {
+	case hasStart && hasEnd:
+		if startTime.Year() == endTime.Year() && startTime.Month() == endTime.Month() {
+			return startTime.Format("Jan 2") + " – " + endTime.Format("2, 2006")
+		}
+		if startTime.Year() == endTime.Year() {
+			return startTime.Format("Jan 2") + " – " + endTime.Format("Jan 2, 2006")
+		}
+		return startTime.Format("Jan 2, 2006") + " – " + endTime.Format("Jan 2, 2006")
+	case hasStart:
+		return "Since " + startTime.Format("Jan 2, 2006")
+	case hasEnd:
+		return "Up to " + endTime.Format("Jan 2, 2006")
+	}
+	return ""
+}
+
+func humaneFactType(factType string) string {
+	switch factType {
+	case "vendor":
+		return "Vendor"
+	case "person":
+		return "Person"
+	case "organization":
+		return "Org"
+	case "amount":
+		return "Amount"
+	case "amount_paid":
+		return "Paid"
+	case "amount_due":
+		return "Due"
+	case "due_date":
+		return "Due"
+	case "date":
+		return "Date"
+	case "appointment":
+		return "Appointment"
+	case "policy_number":
+		return "Policy"
+	case "account_number":
+		return "Account"
+	case "document_title":
+		return "Document"
+	case "document_type":
+		return "Type"
+	case "payment_status":
+		return "Status"
+	case "requested_action":
+		return "Action"
+	case "decision_reason":
+		return "Reason"
+	}
+	if factType == "" {
+		return "Fact"
+	}
+	return strings.ReplaceAll(strings.ToUpper(factType[:1])+factType[1:], "_", " ")
+}
+
+func humaneRelationLabel(relType string) string {
+	switch relType {
+	case "duplicate_of":
+		return "Duplicate of"
+	case "supersedes":
+		return "Supersedes"
+	case "updates_fact":
+		return "Updates"
+	case "same_obligation_as":
+		return "Same obligation as"
+	case "supports":
+		return "Related to"
+	case "contradicts":
+		return "Conflicts with"
+	case "related_to":
+		return "Related to"
+	}
+	return strings.ReplaceAll(strings.ToUpper(relType[:1])+relType[1:], "_", " ")
+}
+
 func humaneSource(source string) string {
 	switch source {
 	case "watch_folder":

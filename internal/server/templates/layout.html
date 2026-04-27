@@ -14,6 +14,7 @@
     </a>
     <nav class="zora-nav" aria-label="Primary">
       <a href="/" {{ if .Nav.Today }}aria-current="page"{{ end }}>Today</a>
+      <a href="/threads" {{ if .Nav.Threads }}aria-current="page"{{ end }}>Threads</a>
       <a href="/search" {{ if .Nav.Search }}aria-current="page"{{ end }}>Search</a>
       <a href="/library" {{ if .Nav.Library }}aria-current="page"{{ end }}>Library</a>
       <a href="/briefings" {{ if .Nav.Briefings }}aria-current="page"{{ end }}>Briefings</a>
@@ -43,6 +44,18 @@
       {{ humaneType .Type }}{{ if .EventAt.Valid }} &middot; {{ humaneDate .EventAt.String }}{{ else }} &middot; added {{ humaneDate .CreatedAt }}{{ end }}
     </p>
     {{ if .TextPreview.Valid }}<p class="zora-item-summary">{{ .TextPreview.String }}</p>{{ end }}
+  </article>
+</a>
+{{ end }}
+
+{{ define "libraryCard" }}
+<a class="zora-item-link" href="/library/{{ .Artifact.ID }}">
+  <article class="zora-item">
+    <p class="zora-item-title">{{ if .Artifact.Title }}{{ .Artifact.Title }}{{ else }}Untitled item{{ end }}</p>
+    <p class="zora-meta">
+      {{ if .Subline }}{{ .Subline }} &middot; {{ end }}{{ humaneType .Artifact.Type }}{{ if .Artifact.EventAt.Valid }} &middot; {{ humaneDate .Artifact.EventAt.String }}{{ else }} &middot; added {{ humaneDate .Artifact.CreatedAt }}{{ end }}
+    </p>
+    {{ if .Artifact.TextPreview.Valid }}<p class="zora-item-summary">{{ .Artifact.TextPreview.String }}</p>{{ end }}
   </article>
 </a>
 {{ end }}

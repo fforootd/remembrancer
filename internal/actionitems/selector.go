@@ -287,7 +287,37 @@ func enrichCandidate(ctx context.Context, db *sql.DB, candidate *Candidate) erro
 		return err
 	}
 	candidate.BriefingHistory = history
+	threads, err := candidateThreads(ctx, db, candidate.ArtifactID)
+	if err != nil {
+		return err
+	}
+	candidate.Threads = threads
 	return nil
+}
+
+func candidateThreads(ctx context.Context, db *sql.DB, artifactID string) ([]CandidateThread, error) {
+	rows, err := db.QueryContext(ctx, `
+SELECT t.id, t.title, t.kind
+FROM thread t
+JOIN thread_member m ON m.thread_id = t.id
+WHERE m.artifact_id = ?
+	AND t.status = 'active'
+ORDER BY t.updated_at DESC
+LIMIT 4
+`, artifactID)
+	if err != nil {
+		return nil, fmt.Errorf("query candidate threads: %w", err)
+	}
+	defer rows.Close()
+	var out []CandidateThread
+	for rows.Next() {
+		var t CandidateThread
+		if err := rows.Scan(&t.ID, &t.Title, &t.Kind); err != nil {
+			return nil, fmt.Errorf("scan candidate thread: %w", err)
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
 }
 
 func candidateClass(ctx context.Context, db *sql.DB, artifactID string) (string, error) {

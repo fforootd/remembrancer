@@ -29,7 +29,14 @@ type Candidate struct {
 	Facts           []CandidateFact     `json:"facts,omitempty"`
 	Relations       []CandidateRelation `json:"relations,omitempty"`
 	BriefingHistory []CandidateBriefing `json:"briefing_history,omitempty"`
+	Threads         []CandidateThread   `json:"threads,omitempty"`
 	Evidence        string              `json:"evidence"`
+}
+
+type CandidateThread struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+	Kind  string `json:"kind"`
 }
 
 type CandidateFact struct {

@@ -38,7 +38,31 @@
             <p class="zora-meta">{{ len .ComingUp }} item{{ if ne (len .ComingUp) 1 }}s{{ end }} in the next two weeks</p>
           </div>
           <div class="zora-stack">
-            {{ range .ComingUp }}{{ template "todayCard" . }}{{ end }}
+            {{ range .ComingUp }}{{ template "upcomingCard" . }}{{ end }}
+          </div>
+        </section>
+      {{ end }}
+
+      {{ if .ActiveThreads }}
+        <section class="zora-section" aria-label="Active threads">
+          <div class="zora-section-header">
+            <h2>Active threads</h2>
+            <p class="zora-meta"><a href="/threads">All threads &rarr;</a></p>
+          </div>
+          <div class="zora-stack">
+            {{ range .ActiveThreads }}
+              <a class="zora-item-link" href="/threads/{{ .Thread.ID }}">
+                <article class="zora-item">
+                  <p class="zora-item-title">{{ .Thread.Title }}</p>
+                  <p class="zora-meta">
+                    {{ .KindLabel }}
+                    {{ if .DateRange }} &middot; {{ .DateRange }}{{ end }}
+                    &middot; {{ .Thread.MemberCount }} item{{ if ne .Thread.MemberCount 1 }}s{{ end }}
+                  </p>
+                  {{ if .Thread.Summary }}<p class="zora-item-summary">{{ .Thread.Summary }}</p>{{ end }}
+                </article>
+              </a>
+            {{ end }}
           </div>
         </section>
       {{ end }}
@@ -75,7 +99,7 @@
         </section>
       {{ end }}
 
-      {{ if and .HasBriefing (not .ComingUp) (not .Categories) (not .WorthRemember) }}
+      {{ if and .HasBriefing (not .ComingUp) (not .Categories) (not .WorthRemember) (not .ActiveThreads) }}
         <div class="zora-empty">
           <h2>Nothing pressing</h2>
           <p>No items from recent briefings need attention right now.</p>
@@ -116,4 +140,21 @@
     <a class="zora-actions-link" href="/briefings/{{ .BriefingID }}">In briefing &rarr;</a>
   </div>
 </article>
+{{ end }}
+
+{{ define "upcomingCard" }}
+<a class="zora-item-link" href="{{ .Link }}">
+  <article class="zora-item">
+    <header style="margin:0 0 6px">
+      {{ if .DueLabel }}
+        <div class="zora-chips">
+          <span class="zora-chip {{ .DueClass }}">{{ .DueLabel }}</span>
+          {{ if eq .Source "artifact" }}<span class="zora-chip">from artifact</span>{{ end }}
+        </div>
+      {{ end }}
+      <p class="zora-item-title">{{ .Title }}</p>
+    </header>
+    {{ if .Subtitle }}<p class="zora-meta">{{ .Subtitle }}</p>{{ end }}
+  </article>
+</a>
 {{ end }}

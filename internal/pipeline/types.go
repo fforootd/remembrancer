@@ -15,7 +15,25 @@ const (
 	StageClassifyArtifact  = "classify_artifact"
 	StageExtractFields     = "extract_fields"
 	StageReconcileArtifact = "reconcile_artifact"
+	StageClusterThreads    = "cluster_threads"
 	StageGenerateBriefing  = "generate_briefing"
+
+	ThreadKindVisit         = "visit"
+	ThreadKindContract      = "contract"
+	ThreadKindVendorAccount = "vendor_account"
+	ThreadKindProject       = "project"
+	ThreadKindSchoolYear    = "school_year"
+	ThreadKindVehicle       = "vehicle"
+	ThreadKindTravel        = "travel"
+	ThreadKindOther         = "other"
+
+	ThreadStatusActive    = "active"
+	ThreadStatusArchived  = "archived"
+	ThreadStatusDismissed = "dismissed"
+
+	ThreadMemberSourceRule = "rule"
+	ThreadMemberSourceLLM  = "llm"
+	ThreadMemberSourceUser = "user"
 
 	SourceRule = "rule"
 	SourceLLM  = "llm"
@@ -186,6 +204,36 @@ type Relation struct {
 	Status           string
 }
 
+type Thread struct {
+	ID            string
+	Kind          string
+	Title         string
+	Summary       string
+	DateStart     string
+	DateEnd       string
+	Status        string
+	SignatureJSON string
+	CreatedAt     string
+	UpdatedAt     string
+}
+
+type ThreadMember struct {
+	ThreadID   string
+	ArtifactID string
+	Score      float64
+	Source     string
+	AddedAt    string
+}
+
+type ThreadAssignment struct {
+	ThreadID   string
+	ArtifactID string
+	Score      float64
+	Source     string
+	NewThread  bool
+	Proposed   bool
+}
+
 type StageResult struct {
 	Stage  string `json:"stage"`
 	Status string `json:"status"`
@@ -199,6 +247,7 @@ type ProcessResult struct {
 	Classification    string        `json:"classification"`
 	FactCount         int           `json:"fact_count"`
 	RelationCount     int           `json:"relation_count"`
+	ThreadCount       int           `json:"thread_count"`
 	Warnings          []string      `json:"warnings,omitempty"`
 	FieldLLMAttempted bool          `json:"field_llm_attempted"`
 }

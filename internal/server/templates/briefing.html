@@ -12,6 +12,25 @@
       <h1>{{ .Run.Title }}</h1>
       <p class="zora-meta">{{ humaneDate .Run.PeriodStart }} &ndash; {{ humaneDate .Run.PeriodEnd }} &middot; generated {{ humaneDate .Run.CreatedAt }}</p>
 
+      {{ if .Threads }}
+        <section class="zora-section" aria-label="From your active threads">
+          <div class="zora-section-header">
+            <h2>From your active threads</h2>
+            <p class="zora-meta">Items in this briefing belong to {{ len .Threads }} thread{{ if ne (len .Threads) 1 }}s{{ end }}</p>
+          </div>
+          <div class="zora-stack">
+            {{ range .Threads }}
+              <a class="zora-item-link" href="/threads/{{ .ID }}">
+                <article class="zora-item">
+                  <p class="zora-item-title">{{ .Title }}</p>
+                  <p class="zora-meta">{{ .KindLabel }} &middot; {{ .ItemCount }} item{{ if ne .ItemCount 1 }}s{{ end }} in this briefing</p>
+                </article>
+              </a>
+            {{ end }}
+          </div>
+        </section>
+      {{ end }}
+
       <section class="zora-section" aria-label="Briefing items">
         {{ if .Categories }}
           {{ range .Categories }}
@@ -54,10 +73,11 @@
 
 {{ define "briefingCard" }}
 <article class="zora-item">
-  {{ if or .DueLabel (eq .Item.SourceStatus "unverified") }}
+  {{ if or .DueLabel (eq .Item.SourceStatus "unverified") .Item.ThreadID }}
     <div class="zora-chips">
       {{ if .DueLabel }}<span class="zora-chip {{ .DueClass }}">{{ .DueLabel }}</span>{{ end }}
       {{ if eq .Item.SourceStatus "unverified" }}<span class="zora-chip zora-chip--review">Needs review</span>{{ end }}
+      {{ if .Item.ThreadID }}<a class="zora-chip" href="/threads/{{ .Item.ThreadID }}">Thread: {{ if .Item.ThreadTitle }}{{ .Item.ThreadTitle }}{{ else }}{{ .Item.ThreadID }}{{ end }}</a>{{ end }}
     </div>
   {{ end }}
   <p class="zora-item-title">{{ .Item.Title }}</p>

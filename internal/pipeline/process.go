@@ -60,12 +60,35 @@ func (r Runner) ProcessArtifact(ctx context.Context, artifactID string) (Process
 	result.RelationCount = len(relations)
 	result.Stages = append(result.Stages, StageResult{Stage: StageReconcileArtifact, Status: "succeeded"})
 
+	threads, err := r.runClusterThreads(ctx, artifactID, now)
+	if err != nil {
+		return result, err
+	}
+	result.ThreadCount = len(threads)
+	result.Stages = append(result.Stages, StageResult{Stage: StageClusterThreads, Status: "succeeded"})
+
 	classification, _, err := LoadClassification(ctx, r.DB, artifactID)
 	if err != nil {
 		return result, err
 	}
 	result.Classification = classification.Class
 	return result, nil
+}
+
+func (r Runner) runClusterThreads(ctx context.Context, artifactID string, now time.Time) ([]ThreadAssignment, error) {
+	stageHash := inputHash(artifactID, "threads")
+	if err := MarkStageRunning(ctx, r.DB, artifactID, StageClusterThreads, stageHash, now); err != nil {
+		return nil, err
+	}
+	assignments, err := ClusterArtifact(ctx, r.DB, artifactID, now)
+	if err != nil {
+		_ = MarkStageFailed(ctx, r.DB, artifactID, StageClusterThreads, stageHash, err, now)
+		return nil, err
+	}
+	if err := MarkStageSucceeded(ctx, r.DB, artifactID, StageClusterThreads, stageHash, now); err != nil {
+		return nil, err
+	}
+	return assignments, nil
 }
 
 func (r Runner) runEvidenceAndClassify(ctx context.Context, artifactID string, snapshot artifactSnapshot, now time.Time) ([]Evidence, error) {

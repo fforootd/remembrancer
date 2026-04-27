@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <title>{{ if .NotFound }}Thread not found{{ else }}{{ .Thread.Title }}{{ end }} &middot; {{ .AppName }}</title>
+    {{ template "head" . }}
+  </head>
+  <body>
+    {{ template "topbar" . }}
+    <main>
+      <a class="zora-back" href="/threads">&larr; Threads</a>
+      {{ if .NotFound }}
+        <section class="zora-hero">
+          <p class="zora-eyebrow">Not found</p>
+          <h1>This thread no longer exists.</h1>
+          <p class="zora-meta">It may have been archived or merged.</p>
+        </section>
+      {{ else }}
+        <section class="zora-hero">
+          <p class="zora-eyebrow">{{ .KindLabel }} thread</p>
+          <h1>{{ .Thread.Title }}</h1>
+          <p class="zora-meta">
+            {{ if .DateRange }}{{ .DateRange }} &middot; {{ end }}
+            {{ .Thread.MemberCount }} item{{ if ne .Thread.MemberCount 1 }}s{{ end }}
+            {{ if eq .Thread.Status "archived" }} &middot; <span class="zora-chip">archived</span>{{ end }}
+          </p>
+          {{ if .Thread.Summary }}<p class="zora-item-summary">{{ .Thread.Summary }}</p>{{ end }}
+        </section>
+
+        {{ if .Facts }}
+          <section class="zora-section" aria-label="Key facts">
+            <h2>Key facts across this thread</h2>
+            <div class="zora-chips">
+              {{ range .Facts }}
+                <span class="zora-chip">{{ humaneFactType .Type }}: {{ .Value }}{{ if gt .Sources 1 }} ({{ .Sources }} sources){{ end }}</span>
+              {{ end }}
+            </div>
+          </section>
+        {{ end }}
+
+        <section class="zora-section" aria-label="Timeline">
+          <h2>Timeline</h2>
+          {{ if .Members }}
+            <div class="zora-stack">
+              {{ range .Members }}
+                <a class="zora-item-link" href="/library/{{ .Member.ArtifactID }}">
+                  <article class="zora-item">
+                    <p class="zora-item-title">{{ if .Member.Title }}{{ .Member.Title }}{{ else }}Untitled item{{ end }}</p>
+                    <p class="zora-meta">
+                      {{ humaneType .Member.Type }}
+                      {{ if .Member.EventAt }} &middot; {{ humaneDate .Member.EventAt }}{{ end }}
+                      {{ if eq .Member.Source "user" }} &middot; <span class="zora-chip">added by you</span>{{ end }}
+                      {{ if eq .Member.Source "llm" }} &middot; <span class="zora-chip">model-confirmed</span>{{ end }}
+                    </p>
+                  </article>
+                </a>
+              {{ end }}
+            </div>
+          {{ else }}
+            <p class="zora-meta">This thread has no surviving items. It may have been emptied by deletions.</p>
+          {{ end }}
+        </section>
+
+        <section class="zora-section zora-tech">
+          <details>
+            <summary>Technical details</summary>
+            <div>
+              <dl class="zora-props">
+                <dt>Thread ID</dt><dd>{{ .Thread.ID }}</dd>
+                <dt>Kind</dt><dd>{{ .Thread.Kind }}</dd>
+                <dt>Status</dt><dd>{{ .Thread.Status }}</dd>
+                <dt>Created</dt><dd>{{ .Thread.CreatedAt }}</dd>
+                <dt>Updated</dt><dd>{{ .Thread.UpdatedAt }}</dd>
+                {{ if .Thread.DateStart }}<dt>Date range</dt><dd>{{ .Thread.DateStart }} &rarr; {{ .Thread.DateEnd }}</dd>{{ end }}
+              </dl>
+            </div>
+          </details>
+        </section>
+      {{ end }}
+    </main>
+    {{ template "footer" . }}
+  </body>
+</html>

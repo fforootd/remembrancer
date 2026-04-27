@@ -14,6 +14,52 @@
         Found in {{ humaneSource .Artifact.Source }}{{ if .Artifact.EventAt.Valid }} &middot; {{ humaneDate .Artifact.EventAt.String }}{{ else }} &middot; added {{ humaneDate .Artifact.CreatedAt }}{{ end }}
       </p>
 
+      {{ if .HasUnderstanding }}
+        <section class="zora-section" aria-label="What Zora sees">
+          {{ if .HasClassification }}
+            <div class="zora-chips" style="margin-bottom:8px">
+              <span class="zora-chip">{{ .Classification.Label }}</span>
+              {{ if .Classification.NeedsReview }}<span class="zora-chip zora-chip--review">Needs review</span>{{ end }}
+              {{ if eq .Classification.Source "rule" }}<span class="zora-chip">rule</span>{{ end }}
+            </div>
+          {{ end }}
+          {{ if .KeyFacts }}
+            <div class="zora-chips" style="margin-bottom:8px">
+              {{ range .KeyFacts }}
+                <span class="zora-chip {{ .DueClass }}">
+                  <strong>{{ .Label }}:</strong>&nbsp;{{ .Value }}{{ if .DueLabel }} &middot; {{ .DueLabel }}{{ end }}
+                </span>
+              {{ end }}
+            </div>
+          {{ end }}
+          {{ if .Threads }}
+            <p class="zora-meta">
+              Threads:
+              {{ range $i, $t := .Threads }}{{ if $i }}, {{ end }}<a href="/threads/{{ $t.ID }}">{{ $t.Title }}</a>{{ end }}
+            </p>
+          {{ end }}
+          {{ if .Relations }}
+            <details style="margin-top:8px">
+              <summary>Related artifacts ({{ len .Relations }})</summary>
+              <div class="zora-stack" style="margin-top:8px">
+                {{ range .Relations }}
+                  <a class="zora-item-link" href="/library/{{ .ArtifactID }}">
+                    <article class="zora-item">
+                      <p class="zora-item-title">{{ if .Title }}{{ .Title }}{{ else }}{{ humaneType .Type }}{{ end }}</p>
+                      <p class="zora-meta">
+                        {{ humaneRelationLabel .Relation }}
+                        {{ if .EventAt }} &middot; {{ humaneDate .EventAt }}{{ end }}
+                      </p>
+                      {{ if .Reason }}<p class="zora-item-summary">{{ .Reason }}</p>{{ end }}
+                    </article>
+                  </a>
+                {{ end }}
+              </div>
+            </details>
+          {{ end }}
+        </section>
+      {{ end }}
+
       {{ if eq .Artifact.Type "image" }}
         <div class="zora-preview">
           <img src="/library/{{ .Artifact.ID }}/raw" alt="{{ .Artifact.Title }}" loading="lazy">

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"zora/internal/llm/jsonparse"
 	"zora/internal/llm/prompts"
 )
 
@@ -100,11 +101,42 @@ func (c OllamaFieldClient) ExtractFacts(ctx context.Context, req FieldRequest) (
 		return GeneratedFactResponse{}, fmt.Errorf("ollama returned empty field content")
 	}
 
-	var generated GeneratedFactResponse
-	if err := json.Unmarshal([]byte(chatResponse.Message.Content), &generated); err != nil {
+	generated, err := decodeGeneratedFactResponse(chatResponse.Message.Content)
+	if err != nil {
 		return GeneratedFactResponse{}, fmt.Errorf("decode field JSON: %w", err)
 	}
 	return generated, nil
+}
+
+// decodeGeneratedFactResponse accepts the requested {"facts":[...]} object,
+// a bare [...] array of facts, or {<other-key>:[...]} nested under a
+// recognisable wrapper key. Anything else surfaces the original error.
+func decodeGeneratedFactResponse(content string) (GeneratedFactResponse, error) {
+	var generated GeneratedFactResponse
+	objErr := jsonparse.UnmarshalLenient([]byte(content), &generated)
+	if objErr == nil && len(generated.Facts) > 0 {
+		return generated, nil
+	}
+	var facts []GeneratedFact
+	if arrErr := jsonparse.UnmarshalLenient([]byte(content), &facts); arrErr == nil {
+		return GeneratedFactResponse{Facts: facts}, nil
+	}
+	var wrapped map[string]json.RawMessage
+	if wrapErr := jsonparse.UnmarshalLenient([]byte(content), &wrapped); wrapErr == nil {
+		for _, key := range []string{"items", "results", "data", "Facts", "extracted_facts"} {
+			raw, ok := wrapped[key]
+			if !ok {
+				continue
+			}
+			if err := json.Unmarshal(raw, &facts); err == nil && len(facts) > 0 {
+				return GeneratedFactResponse{Facts: facts}, nil
+			}
+		}
+	}
+	if objErr == nil {
+		return generated, nil
+	}
+	return GeneratedFactResponse{}, objErr
 }
 
 func (c OllamaFieldClient) chatRequest(req FieldRequest) (ollamaChatRequest, error) {
