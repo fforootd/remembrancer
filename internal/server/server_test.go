@@ -68,7 +68,7 @@ func newTestServer(t *testing.T) http.Handler {
 		t.Fatalf("Migrate: %v", err)
 	}
 
-	handler, err := New(cfg, database, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	handler, err := New(cfg, database, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
 	if err != nil {
 		t.Fatalf("New server: %v", err)
 	}

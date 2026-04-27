@@ -12,8 +12,12 @@ import (
 	"syscall"
 	"time"
 
+	"zora/internal/blobs"
 	"zora/internal/config"
 	"zora/internal/db"
+	"zora/internal/extract"
+	"zora/internal/ingest"
+	"zora/internal/jobs"
 	"zora/internal/server"
 )
 
@@ -69,7 +73,35 @@ func runServe(args []string, stdout, stderr io.Writer) int {
 	}
 
 	logger := slog.New(slog.NewTextHandler(stderr, &slog.HandlerOptions{}))
-	handler, err := server.New(cfg, database, logger)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	var ingestService *ingest.Service
+	if cfg.Ingest.Enabled {
+		jobStore := jobs.Store{DB: database}
+		ingestService = &ingest.Service{
+			Scanner: ingest.Scanner{
+				DB:             database,
+				Jobs:           jobStore,
+				Inbox:          cfg.Paths.Inbox,
+				SettleDuration: cfg.Ingest.SettleDuration,
+				MaxAttempts:    cfg.Ingest.MaxAttempts,
+			},
+			Jobs: jobStore,
+			Handler: ingest.FileHandler{
+				DB:        database,
+				Blobs:     blobs.Store{ArchiveRoot: cfg.Paths.Archive},
+				Extractor: extract.LocalExtractor{Timeout: cfg.Ingest.ExtractTimeout},
+				Owner:     cfg.User.ID,
+			},
+			ScanInterval: cfg.Ingest.ScanInterval,
+			Workers:      cfg.Ingest.Workers,
+			Logger:       logger,
+		}
+		ingestService.Start(ctx)
+	}
+
+	handler, err := server.New(cfg, database, logger, ingestService)
 	if err != nil {
 		fmt.Fprintf(stderr, "create server: %v\n", err)
 		return 1
@@ -88,16 +120,13 @@ func runServe(args []string, stdout, stderr io.Writer) int {
 		errs <- httpServer.ListenAndServe()
 	}()
 
-	signals := make(chan os.Signal, 1)
-	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
-
 	select {
 	case err := <-errs:
 		if err != nil && err != http.ErrServerClosed {
 			fmt.Fprintf(stderr, "serve: %v\n", err)
 			return 1
 		}
-	case <-signals:
+	case <-ctx.Done():
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err := httpServer.Shutdown(ctx); err != nil {

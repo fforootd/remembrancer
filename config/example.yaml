@@ -13,6 +13,15 @@ paths:
 sqlite:
   path: ".local/runtime/users/florian/main.sqlite"
 
+ingest:
+  enabled: true
+  scan_interval: "30s"
+  settle_duration: "10s"
+  workers: 2
+  extract_timeout: "2m"
+  max_attempts: 3
+
 llm:
   enabled: false
-
+  base_url: "http://127.0.0.1:11434/v1"
+  model: ""

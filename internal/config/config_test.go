@@ -37,8 +37,17 @@ paths:
   inbox: "inbox"
 sqlite:
   path: "runtime/users/florian/main.sqlite"
+ingest:
+  enabled: true
+  scan_interval: "45s"
+  settle_duration: "5s"
+  workers: 4
+  extract_timeout: "90s"
+  max_attempts: 5
 llm:
   enabled: true
+  base_url: "http://127.0.0.1:11434/v1"
+  model: "gemma"
 `)
 	if err := os.WriteFile(path, data, 0o644); err != nil {
 		t.Fatalf("write config fixture: %v", err)
@@ -57,6 +66,12 @@ llm:
 	}
 	if !cfg.LLM.Enabled {
 		t.Fatal("LLM should be enabled by explicit config")
+	}
+	if cfg.Ingest.Workers != 4 {
+		t.Fatalf("Ingest.Workers = %d", cfg.Ingest.Workers)
+	}
+	if cfg.Ingest.ScanInterval.String() != "45s" {
+		t.Fatalf("Ingest.ScanInterval = %s", cfg.Ingest.ScanInterval)
 	}
 }
 

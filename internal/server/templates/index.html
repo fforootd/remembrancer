@@ -74,11 +74,26 @@
         margin-top: 24px;
       }
 
+      .section {
+        margin-top: 34px;
+      }
+
       .panel {
         border: 1px solid var(--line);
         border-radius: 8px;
         background: var(--panel);
         padding: 16px;
+      }
+
+      .row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .row + .row {
+        margin-top: 10px;
       }
 
       .label {
@@ -98,6 +113,61 @@
         color: var(--accent);
         font-weight: 700;
       }
+
+      .button {
+        appearance: none;
+        border: 1px solid var(--accent);
+        border-radius: 8px;
+        background: var(--accent);
+        color: white;
+        cursor: pointer;
+        font: inherit;
+        font-weight: 700;
+        padding: 9px 13px;
+      }
+
+      .button:disabled {
+        border-color: var(--line);
+        background: var(--line);
+        color: var(--muted);
+        cursor: default;
+      }
+
+      .list {
+        display: grid;
+        gap: 10px;
+        margin-top: 14px;
+      }
+
+      .item {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        padding: 13px 14px;
+      }
+
+      .meta {
+        color: var(--muted);
+        font-size: 0.85rem;
+      }
+
+      .error {
+        color: #9b1c1c;
+      }
+
+      .counts {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 10px;
+      }
+
+      .pill {
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 3px 9px;
+        font-size: 0.82rem;
+      }
     </style>
   </head>
   <body>
@@ -113,7 +183,7 @@
 
     <main>
       <h2>Hello, {{ .UserName }}</h2>
-      <p class="subtitle">The service shell is running. Ingestion starts in the next milestone.</p>
+      <p class="subtitle">Watch-folder ingestion is ready for local files.</p>
 
       <section class="status" aria-label="Runtime configuration">
         <div class="panel">
@@ -135,6 +205,75 @@
         <div class="panel">
           <p class="label">LLM</p>
           <p class="value">{{ if .LLMEnabled }}enabled{{ else }}disabled{{ end }}</p>
+          <p class="meta">{{ .LLMBaseURL }}{{ if .LLMModel }} / {{ .LLMModel }}{{ end }}</p>
+        </div>
+      </section>
+
+      <section class="section" aria-label="Ingest controls">
+        <div class="panel">
+          <div class="row">
+            <div>
+              <p class="label">Ingest Queue</p>
+              <p class="value">{{ if .IngestEnabled }}enabled{{ else }}disabled{{ end }}</p>
+              <p class="meta">{{ .IngestWorkers }} workers &middot; scan {{ .ScanInterval }} &middot; settle {{ .SettleDuration }} &middot; extract {{ .ExtractTimeout }}</p>
+            </div>
+            <form method="post" action="/ingest/scan">
+              <button class="button" type="submit" {{ if not .IngestEnabled }}disabled{{ end }}>Scan now</button>
+            </form>
+          </div>
+          <div class="counts" aria-label="Job counts">
+            <span class="pill">queued {{ index .JobCounts "queued" }}</span>
+            <span class="pill">running {{ index .JobCounts "running" }}</span>
+            <span class="pill">failed {{ index .JobCounts "failed" }}</span>
+            <span class="pill">dead {{ index .JobCounts "dead" }}</span>
+            <span class="pill">succeeded {{ index .JobCounts "succeeded" }}</span>
+          </div>
+          <div class="counts" aria-label="Watch folder counts">
+            <span class="pill">seen {{ .WatchStats.Seen }}</span>
+            <span class="pill">supported {{ .WatchStats.Supported }}</span>
+            <span class="pill">ignored {{ .WatchStats.Ignored }}</span>
+          </div>
+          {{ if .HasLastScan }}
+            <p class="meta">Last scan: {{ .LastScan.ScannedAt }} &middot; seen {{ .LastScan.Seen }} &middot; enqueued {{ .LastScan.Enqueued }} &middot; existing {{ .LastScan.Existing }} &middot; settling {{ .LastScan.Settling }}{{ if .LastScanError }} &middot; <span class="error">{{ .LastScanError }}</span>{{ end }}</p>
+          {{ end }}
+        </div>
+      </section>
+
+      <section class="section" aria-label="Recent artifacts">
+        <h2>Recent Artifacts</h2>
+        <div class="list">
+          {{ range .RecentArtifacts }}
+            <div class="item">
+              <div class="row">
+                <div>
+                  <p><strong>{{ .Title }}</strong></p>
+                  <p class="meta">{{ .Type }} &middot; {{ .ID }}{{ if .HasText }} &middot; text ready{{ end }}</p>
+                </div>
+              </div>
+              {{ if .TextPreview.Valid }}<p class="meta">{{ .TextPreview.String }}</p>{{ end }}
+            </div>
+          {{ else }}
+            <p class="subtitle">No artifacts ingested yet.</p>
+          {{ end }}
+        </div>
+      </section>
+
+      <section class="section" aria-label="Recent jobs">
+        <h2>Recent Jobs</h2>
+        <div class="list">
+          {{ range .RecentJobs }}
+            <div class="item">
+              <div class="row">
+                <div>
+                  <p><strong>{{ .Kind }}</strong></p>
+                  <p class="meta">{{ .ID }} &middot; {{ .Status }} &middot; attempts {{ .Attempts }}/{{ .MaxAttempts }}</p>
+                </div>
+              </div>
+              {{ if .LastError.Valid }}<p class="meta error">{{ .LastError.String }}</p>{{ end }}
+            </div>
+          {{ else }}
+            <p class="subtitle">No jobs yet.</p>
+          {{ end }}
         </div>
       </section>
     </main>

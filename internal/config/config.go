@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -16,6 +17,7 @@ type Config struct {
 	User   UserConfig   `yaml:"user"`
 	Paths  PathConfig   `yaml:"paths"`
 	SQLite SQLiteConfig `yaml:"sqlite"`
+	Ingest IngestConfig `yaml:"ingest"`
 	LLM    LLMConfig    `yaml:"llm"`
 }
 
@@ -38,8 +40,19 @@ type SQLiteConfig struct {
 	Path string `yaml:"path"`
 }
 
+type IngestConfig struct {
+	Enabled        bool          `yaml:"enabled"`
+	ScanInterval   time.Duration `yaml:"scan_interval"`
+	SettleDuration time.Duration `yaml:"settle_duration"`
+	Workers        int           `yaml:"workers"`
+	ExtractTimeout time.Duration `yaml:"extract_timeout"`
+	MaxAttempts    int           `yaml:"max_attempts"`
+}
+
 type LLMConfig struct {
-	Enabled bool `yaml:"enabled"`
+	Enabled bool   `yaml:"enabled"`
+	BaseURL string `yaml:"base_url"`
+	Model   string `yaml:"model"`
 }
 
 func Default() Config {
@@ -59,8 +72,18 @@ func Default() Config {
 		SQLite: SQLiteConfig{
 			Path: ".local/runtime/users/florian/main.sqlite",
 		},
+		Ingest: IngestConfig{
+			Enabled:        true,
+			ScanInterval:   30 * time.Second,
+			SettleDuration: 10 * time.Second,
+			Workers:        2,
+			ExtractTimeout: 2 * time.Minute,
+			MaxAttempts:    3,
+		},
 		LLM: LLMConfig{
 			Enabled: false,
+			BaseURL: "http://127.0.0.1:11434/v1",
+			Model:   "",
 		},
 	}
 }
@@ -105,6 +128,24 @@ func (cfg Config) Validate() error {
 	}
 	if err := validatePath("sqlite.path", cfg.SQLite.Path); err != nil {
 		return err
+	}
+	if cfg.Ingest.ScanInterval <= 0 {
+		return errors.New("ingest.scan_interval must be positive")
+	}
+	if cfg.Ingest.SettleDuration < 0 {
+		return errors.New("ingest.settle_duration must not be negative")
+	}
+	if cfg.Ingest.Workers < 1 {
+		return errors.New("ingest.workers must be at least 1")
+	}
+	if cfg.Ingest.ExtractTimeout <= 0 {
+		return errors.New("ingest.extract_timeout must be positive")
+	}
+	if cfg.Ingest.MaxAttempts < 1 {
+		return errors.New("ingest.max_attempts must be at least 1")
+	}
+	if cfg.LLM.Enabled && cfg.LLM.BaseURL == "" {
+		return errors.New("llm.base_url is required when llm.enabled is true")
 	}
 	return nil
 }
